@@ -220,7 +220,6 @@ GameObject:
   m_Component:
   - component: {fileID: 1133329805}
   - component: {fileID: 1133329806}
-  - component: {fileID: 1133329807}
   m_Layer: 0
   m_Name: GameManager
   m_TagString: Untagged
@@ -252,25 +251,9 @@ MonoBehaviour:
   m_GameObject: {fileID: 1133329804}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 308cb3e810a8ffc45b5f35f7c3c27540, type: 3}
+  m_Script: {fileID: 11500000, guid: ee655192ae6720346ab961c633019763, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Card
-  id: 0
-  suit: 0
-  number: 0
-  strength: 0
---- !u!114 &1133329807
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1133329804}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: c40037ae2b244f543bc58dbde9609f61, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::deck
+  m_EditorClassIdentifier: Assembly-CSharp::GameManager
 --- !u!1 &1176380516
 GameObject:
   m_ObjectHideFlags: 0
