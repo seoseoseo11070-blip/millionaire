@@ -1,5 +1,8 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
+
+
 public class Card
 {
     public enum SuitType { Spade, Heart, Diamond, Club, Joker }
@@ -20,6 +23,10 @@ public class Card
 
 public class GameManager : MonoBehaviour
 {
+    [SerializeField] private GameObject cardPrefab;
+    [SerializeField] private Transform handArea;
+    // 画像を入れる
+    [SerializeField] private Sprite[] cardSprites = new Sprite[54];
     private List<Card> deck = new List<Card>();
     private List<List<Card>> playerHands = new List<List<Card>>();
 
@@ -32,7 +39,6 @@ public class GameManager : MonoBehaviour
     public void StartGame(int playerCount)
     {
         CreateAdvancedDeck();
-
         ShuffleDeck();
 
         playerHands.Clear();
@@ -42,11 +48,11 @@ public class GameManager : MonoBehaviour
         }
 
         DistributeCards(playerCount);
-
         DebugLogHands();
+        DisplayMyHand();
     }
 
-    // 54枚の山札を生成する関数
+    // 54枚の山札を生成する
     private void CreateAdvancedDeck()
     {
         deck.Clear();
@@ -103,6 +109,39 @@ public class GameManager : MonoBehaviour
             playerHands[i].Sort((a, b) => a.strength.CompareTo(b.strength));
         }
     }
+
+    private void DisplayMyHand()
+    {
+        foreach (Transform child in handArea)
+        {
+            Destroy(child.gameObject);
+        }
+
+        List<Card> myHand = playerHands[0];
+        foreach (Card card in myHand)
+        {
+
+            GameObject newCard = Instantiate(cardPrefab, handArea);
+
+
+            Image cardImage = newCard.GetComponent<Image>();
+            if (cardImage == null)
+            {
+                cardImage = newCard.GetComponentInChildren<Image>();
+            }
+
+            if (cardImage != null)
+            {
+                int spriteIndex = card.id - 1;
+
+                if (spriteIndex >= 0 && spriteIndex < cardSprites.Length && cardSprites[spriteIndex] != null)
+                {
+                    cardImage.sprite = cardSprites[spriteIndex];
+                }
+            }
+        }
+    }
+
 
     private void DebugLogHands()
     {
