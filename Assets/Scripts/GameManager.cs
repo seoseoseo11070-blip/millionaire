@@ -116,31 +116,84 @@ public class GameManager : MonoBehaviour
         {
             Destroy(child.gameObject);
         }
+        StartCoroutine(AnimateDistributeCards());
 
-        List<Card> myHand = playerHands[0];
+        // List<Card> myHand = playerHands[0];
+        // foreach (Card card in myHand)
+        // {
+
+        //     GameObject newCard = Instantiate(cardPrefab, handArea);
+
+
+        //     Image cardImage = newCard.GetComponent<Image>();
+        //     if (cardImage == null)
+        //     {
+        //         cardImage = newCard.GetComponentInChildren<Image>();
+        //     }
+
+        //     if (cardImage != null)
+        //     {
+        //         int spriteIndex = card.id - 1;
+
+        //         if (spriteIndex >= 0 && spriteIndex < cardSprites.Length && cardSprites[spriteIndex] != null)
+        //         {
+        //             cardImage.sprite = cardSprites[spriteIndex];
+        //         }
+        //     }
+        // }
+    }
+    // 演出
+    private System.Collections.IEnumerator AnimateDistributeCards()
+    {
+        List<Card> myHand = playerHands[0]; // プレイヤー手札
+
         foreach (Card card in myHand)
         {
-
-            GameObject newCard = Instantiate(cardPrefab, handArea);
-
+            Transform canvasTransform = handArea.parent;
+            GameObject newCard = Instantiate(cardPrefab, canvasTransform);
 
             Image cardImage = newCard.GetComponent<Image>();
-            if (cardImage == null)
-            {
-                cardImage = newCard.GetComponentInChildren<Image>();
-            }
+            if (cardImage == null) cardImage = newCard.GetComponentInChildren<Image>();
 
             if (cardImage != null)
             {
                 int spriteIndex = card.id - 1;
-
                 if (spriteIndex >= 0 && spriteIndex < cardSprites.Length && cardSprites[spriteIndex] != null)
                 {
                     cardImage.sprite = cardSprites[spriteIndex];
                 }
             }
+
+            RectTransform rect = newCard.GetComponent<RectTransform>();
+            if (rect != null)
+            {
+
+                Vector3 originalScale = cardPrefab.GetComponent<RectTransform>().localScale;
+                rect.localScale = originalScale;
+
+
+                Vector2 targetPosition = handArea.GetComponent<RectTransform>().anchoredPosition;
+
+                rect.anchoredPosition = new Vector2(targetPosition.x, targetPosition.y - 500f);
+
+                float elapsed = 0f;
+                float duration = 0.15f;
+                Vector2 startPosition = rect.anchoredPosition;
+
+                while (elapsed < duration)
+                {
+                    elapsed += Time.deltaTime;
+                    rect.anchoredPosition = Vector2.Lerp(startPosition, targetPosition, elapsed / duration);
+                    yield return null;
+                }
+                rect.anchoredPosition = targetPosition;
+            }
+
+            newCard.transform.SetParent(handArea);
+            yield return new WaitForSeconds(0.04f);
         }
     }
+
 
 
     private void DebugLogHands()
