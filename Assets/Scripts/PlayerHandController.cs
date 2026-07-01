@@ -10,9 +10,9 @@ public class PlayerHandController : MonoBehaviour
     [Tooltip("カードから矢印までの高さ")]
     [SerializeField] private float arrowOffsetY = 0.5f;
 
-    [Tooltip("矢印の横幅(Width)")]
+    [Tooltip("矢印の横幅")]
     [SerializeField] private float arrowWidth = 50f;
-    [Tooltip("矢印の縦幅(Height)")]
+    [Tooltip("矢印の縦幅")]
     [SerializeField] private float arrowHeight = 50f;
 
     private List<GameObject> cardObjects = new List<GameObject>();
@@ -74,7 +74,7 @@ public class PlayerHandController : MonoBehaviour
                 {
                     int oldestIndex = selectedIndices[0];
                     selectedIndices.RemoveAt(0);
-                    Debug.Log($"【枚数制限】を超えたため、({oldestIndex + 1}枚目)を解除しました。");
+                    Debug.Log($"枚数制限を超えたため、({oldestIndex + 1}枚目)を解除しました。");
                 }
 
                 selectedIndices.Add(currentCursorIndex);
