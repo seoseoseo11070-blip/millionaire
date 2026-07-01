@@ -8,12 +8,12 @@ public class PlayerHandController : MonoBehaviour
     [SerializeField] private RectTransform cursorArrow;
 
     [Tooltip("カードから矢印までの高さ")]
-    [SerializeField] private float arrowOffsetY = 120f;
+    [SerializeField] private float arrowOffsetY = 0.5f;
 
     [Tooltip("矢印の横幅")]
-    [SerializeField] private float arrowWidth = 0.5f;
+    [SerializeField] private float arrowWidth = 50f;
     [Tooltip("矢印の縦幅")]
-    [SerializeField] private float arrowHeight = 0.5f;
+    [SerializeField] private float arrowHeight = 50f;
 
     private List<GameObject> cardObjects = new List<GameObject>();
     private List<int> selectedIndices = new List<int>();
@@ -43,7 +43,7 @@ public class PlayerHandController : MonoBehaviour
         var keyboard = Keyboard.current;
         if (keyboard == null) return;
 
-        // 矢印キー左
+        //  矢印キー左
         if (keyboard.leftArrowKey.wasPressedThisFrame)
         {
             currentCursorIndex--;
@@ -51,7 +51,7 @@ public class PlayerHandController : MonoBehaviour
             UpdateVisuals();
         }
 
-        // 矢印キー右
+        //  矢印キー右
         if (keyboard.rightArrowKey.wasPressedThisFrame)
         {
             currentCursorIndex++;
@@ -59,7 +59,7 @@ public class PlayerHandController : MonoBehaviour
             UpdateVisuals();
         }
 
-        // スペースキー選択・解除
+        // スペースキー
         if (keyboard.spaceKey.wasPressedThisFrame)
         {
             if (selectedIndices.Contains(currentCursorIndex))
@@ -70,7 +70,6 @@ public class PlayerHandController : MonoBehaviour
             {
                 if (selectedIndices.Count >= 4)
                 {
-                    int oldestIndex = selectedIndices[0];
                     selectedIndices.RemoveAt(0);
                 }
                 selectedIndices.Add(currentCursorIndex);
@@ -82,7 +81,7 @@ public class PlayerHandController : MonoBehaviour
         // ■ Enterキー
         if (keyboard.enterKey.wasPressedThisFrame || keyboard.numpadEnterKey.wasPressedThisFrame)
         {
-            PlayCardAtCursor();
+            TryPlayOrPassSelectedCards();
         }
     }
 
@@ -107,33 +106,51 @@ public class PlayerHandController : MonoBehaviour
         else Debug.Log("【現在選択中のカード一覧】: なし");
     }
 
-    private void PlayCardAtCursor()
+    private void TryPlayOrPassSelectedCards()
     {
-        if (currentCursorIndex < 0 || currentCursorIndex >= cardObjects.Count) return;
+        if (gameManager == null) return;
 
-        GameObject targetCardObj = cardObjects[currentCursorIndex];
-
-        Destroy(targetCardObj);
-
-        if (gameManager != null)
+        if (selectedIndices.Count == 0)
         {
-            gameManager.RemoveCardFromData(currentCursorIndex);
+            gameManager.ProcessPass();
+            return;
         }
 
-        selectedIndices.Remove(currentCursorIndex);
+        selectedIndices.RemoveAll(index => index < 0 || index >= cardObjects.Count);
 
-        if (cardObjects.Count > 0)
+        if (selectedIndices.Count == 0)
         {
-            if (currentCursorIndex >= cardObjects.Count)
+            gameManager.ProcessPass();
+            return;
+        }
+
+        List<int> sortedIndices = new List<int>(selectedIndices);
+        sortedIndices.Sort((a, b) => b.CompareTo(a));
+
+        bool canPlay = gameManager.CheckAndPlayCards(sortedIndices);
+
+        if (canPlay)
+        {
+
+            selectedIndices.Clear();
+
+            if (cardObjects.Count > 0)
             {
-                currentCursorIndex = cardObjects.Count - 1;
+                if (currentCursorIndex >= cardObjects.Count)
+                {
+                    currentCursorIndex = cardObjects.Count - 1;
+                }
+            }
+            else
+            {
+                currentCursorIndex = 0;
+                if (cursorArrow != null) cursorArrow.gameObject.SetActive(false);
+                Debug.Log("上がりです");
             }
         }
         else
         {
-            currentCursorIndex = 0;
-            if (cursorArrow != null) cursorArrow.gameObject.SetActive(false);
-            Debug.Log("手札がすべてなくなりました！上がりです！");
+            Debug.LogWarning("そのカードの組み合わせは場に出せません");
         }
 
         UpdateVisuals();
@@ -141,6 +158,8 @@ public class PlayerHandController : MonoBehaviour
 
     private void UpdateVisuals()
     {
+        selectedIndices.RemoveAll(index => index < 0 || index >= cardObjects.Count);
+
         for (int i = 0; i < cardObjects.Count; i++)
         {
             GameObject cardObj = cardObjects[i];
@@ -167,5 +186,4 @@ public class PlayerHandController : MonoBehaviour
         }
     }
 }
-
 

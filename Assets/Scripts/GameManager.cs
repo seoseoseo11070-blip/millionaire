@@ -33,6 +33,10 @@ public class GameManager : MonoBehaviour
     private List<GameObject> spawnedCardObjects = new List<GameObject>();
     private List<Card> spawnedCardDatas = new List<Card>();
 
+    private int currentFieldCardCount = 0;
+    private int currentFieldCardStrength = 0;
+    private bool isRevolution = false;
+
     void Start()
     {
         StartGame(playerCount: 4);
@@ -42,6 +46,10 @@ public class GameManager : MonoBehaviour
     {
         spawnedCardObjects.Clear();
         spawnedCardDatas.Clear();
+
+        currentFieldCardCount = 0;
+        currentFieldCardStrength = 0;
+        isRevolution = false;
 
         CreateAdvancedDeck();
         ShuffleDeck();
@@ -173,6 +181,7 @@ public class GameManager : MonoBehaviour
             handController.SetupHand(spawnedCardObjects, this);
         }
     }
+    // 
     private System.Collections.IEnumerator AnimateMultiShuffleAndSortMyHand()
     {
         List<Card> myHand = playerHands[0];
@@ -210,7 +219,6 @@ public class GameManager : MonoBehaviour
                     cardRect.anchorMin = new Vector2(0.5f, 0.5f);
                     cardRect.anchorMax = new Vector2(0.5f, 0.5f);
                     cardRect.pivot = new Vector2(0.5f, 0.5f);
-
                     float posX = startX + i * (cardWidth + spacing);
                     cardRect.anchoredPosition = new Vector2(posX, 0f);
                 }
@@ -241,7 +249,6 @@ public class GameManager : MonoBehaviour
             }
         }
 
-        // 5. 「強い順」の目的地（ゴール座標）を計算
         List<Vector2> targetPositions = new List<Vector2>();
         for (int i = 0; i < sortedObjects.Count; i++)
         {
@@ -279,22 +286,151 @@ public class GameManager : MonoBehaviour
         spawnedCardDatas = new List<Card>(myHand);
 
         if (layoutGroup != null) layoutGroup.enabled = true;
-
     }
 
-    public void RemoveCardFromData(int handIndex)
+    public void ProcessPass()
+    {
+        Debug.Log("➡パス");
+    }
+
+    public bool CheckAndPlayCards(List<int> indices)
     {
         List<Card> myHand = playerHands[0];
-        if (handIndex >= 0 && handIndex < myHand.Count)
-        {
-            Card removedCard = myHand[handIndex];
-            string cardName = removedCard.suit == Card.SuitType.Joker ? "Joker" : $"{removedCard.suit}({removedCard.number})";
-            Debug.Log($"場にカードを出した: {cardName}");
+        List<Card> selectedCards = new List<Card>();
 
-            myHand.RemoveAt(handIndex);
-            spawnedCardObjects.RemoveAt(handIndex);
-            spawnedCardDatas.RemoveAt(handIndex);
+        foreach (int index in indices)
+        {
+            selectedCards.Add(myHand[index]);
         }
+
+        bool isPair = false;
+        bool isKaidan = false;
+
+        int targetNumber = -1;
+        bool pairValid = true;
+        foreach (Card card in selectedCards)
+        {
+            if (card.suit != Card.SuitType.Joker)
+            {
+                if (targetNumber == -1) targetNumber = card.number;
+                else if (card.number != targetNumber) pairValid = false;
+            }
+        }
+        if (pairValid) isPair = true;
+
+        if (selectedCards.Count == 3 || selectedCards.Count == 4)
+        {
+            Card.SuitType kaidanSuit = Card.SuitType.Joker;
+            List<int> strengths = new List<int>();
+            int jokerCount = 0;
+
+            foreach (Card card in selectedCards)
+            {
+                if (card.suit == Card.SuitType.Joker)
+                {
+                    jokerCount++;
+                }
+                else
+                {
+                    kaidanSuit = card.suit;
+                    strengths.Add(card.strength);
+                }
+            }
+
+            // マークがすべて統一されているか
+            bool suitMatch = true;
+            foreach (Card card in selectedCards)
+            {
+                if (card.suit != Card.SuitType.Joker && card.suit != kaidanSuit) suitMatch = false;
+            }
+
+            if (suitMatch)
+            {
+                strengths.Sort(); // 弱い順に並び替え
+
+                if (jokerCount == 0)
+                {
+                    bool continuous = true;
+                    for (int i = 0; i < strengths.Count - 1; i++)
+                    {
+                        if (strengths[i + 1] != strengths[i] + 1) continuous = false;
+                    }
+                    if (continuous) isKaidan = true;
+                }
+                else if (jokerCount == 1)
+                {
+                    int totalGap = 0;
+                    for (int i = 0; i < strengths.Count - 1; i++)
+                    {
+                        totalGap += (strengths[i + 1] - strengths[i] - 1);
+                    }
+                    if (totalGap <= 1) isKaidan = true;
+                }
+            }
+        }
+
+        if (!isPair && !isKaidan)
+        {
+            return false;
+        }
+
+        List<GameObject> objectsToDestroy = new List<GameObject>();
+        foreach (int index in indices)
+        {
+            objectsToDestroy.Add(spawnedCardObjects[index]);
+            myHand.RemoveAt(index);
+            spawnedCardObjects.RemoveAt(index);
+            spawnedCardDatas.RemoveAt(index);
+        }
+
+        foreach (GameObject obj in objectsToDestroy)
+        {
+            Destroy(obj);
+        }
+
+        // 強さ判定の基準点を算出
+        int selectedStrength = 0;
+        foreach (Card card in selectedCards)
+        {
+            if (card.suit != Card.SuitType.Joker)
+            {
+                selectedStrength = card.strength;
+                break;
+            }
+            selectedStrength = 14;
+        }
+
+        currentFieldCardCount = selectedCards.Count;
+        currentFieldCardStrength = selectedStrength;
+
+        if (isPair && selectedCards.Count == 4)
+        {
+            isRevolution = !isRevolution;
+            Debug.Log($"革命: {isRevolution}");
+        }
+        else if (isKaidan)
+        {
+            if (selectedCards.Count == 3)
+            {
+                Debug.Log($"階段");
+            }
+            else if (selectedCards.Count == 4)
+            {
+                isRevolution = !isRevolution;
+                Debug.Log($"階段革命: {isRevolution}");
+            }
+        }
+        List<string> playedNames = new List<string>();
+        foreach (Card card in selectedCards)
+        {
+            if (card.suit == Card.SuitType.Joker) playedNames.Add("Joker");
+            else playedNames.Add($"{card.suit}({card.number})");
+        }
+        string modeType = isKaidan ? "階段" : "ペア";
+        Debug.Log($"場にカードを {selectedCards.Count} 枚({modeType})出しました！: " + string.Join(", ", playedNames));
+        Debug.Log($"革命中: {isRevolution} ");
+
+        return true;
     }
 
     public List<Card> GetPlayerHandData(int playerIndex)
