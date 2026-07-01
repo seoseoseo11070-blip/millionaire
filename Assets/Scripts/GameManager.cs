@@ -163,7 +163,7 @@ public class GameManager : MonoBehaviour
         }
         if (handController != null)
         {
-            handController.SetupHand(spawnedCardObjects);
+            handController.SetupHand(spawnedCardObjects, this);
         }
     }
 
@@ -178,6 +178,27 @@ public class GameManager : MonoBehaviour
                 else cardNames.Add($"{card.suit}({card.number})");
             }
             Debug.Log($"プレイヤー {i + 1} の手札 ({playerHands[i].Count}枚): " + string.Join(", ", cardNames));
+        }
+    }
+    public List<Card> GetPlayerHandData(int playerIndex)
+    {
+        if (playerIndex >= 0 && playerIndex < playerHands.Count)
+        {
+            return playerHands[playerIndex];
+        }
+        return null;
+    }
+    public void RemoveCardFromData(int handIndex)
+    {
+        List<Card> myHand = playerHands[0];
+        if (handIndex >= 0 && handIndex < myHand.Count)
+        {
+            Card removedCard = myHand[handIndex];
+
+            string cardName = removedCard.suit == Card.SuitType.Joker ? "Joker" : $"{removedCard.suit}({removedCard.number})";
+            Debug.Log($"場にカードを1枚出しました: {cardName}");
+
+            myHand.RemoveAt(handIndex);
         }
     }
 }

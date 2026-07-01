@@ -7,7 +7,7 @@ public class PlayerHandController : MonoBehaviour
 {
     [SerializeField] private RectTransform cursorArrow;
 
-    [Tooltip("カードの頭上から矢印までの高さ（自由に数値を調整してください）")]
+    [Tooltip("カードから矢印までの高さ")]
     [SerializeField] private float arrowOffsetY = 0.5f;
 
     [Tooltip("矢印の横幅(Width)")]
@@ -16,13 +16,17 @@ public class PlayerHandController : MonoBehaviour
     [SerializeField] private float arrowHeight = 50f;
 
     private List<GameObject> cardObjects = new List<GameObject>();
-    private HashSet<int> selectedIndices = new HashSet<int>();
+
+    private List<int> selectedIndices = new List<int>();
+
     private int currentCursorIndex = 0;
     private bool isInputEnabled = false;
+    private GameManager gameManager;
 
-    public void SetupHand(List<GameObject> spawnedCards)
+    public void SetupHand(List<GameObject> spawnedCards, GameManager manager)
     {
         cardObjects = spawnedCards;
+        gameManager = manager;
         currentCursorIndex = 0;
         selectedIndices.Clear();
         isInputEnabled = true;
@@ -41,6 +45,7 @@ public class PlayerHandController : MonoBehaviour
         var keyboard = Keyboard.current;
         if (keyboard == null) return;
 
+        // 矢印キー左
         if (keyboard.leftArrowKey.wasPressedThisFrame)
         {
             currentCursorIndex--;
@@ -48,6 +53,7 @@ public class PlayerHandController : MonoBehaviour
             UpdateVisuals();
         }
 
+        // ▶ 矢印キー右
         if (keyboard.rightArrowKey.wasPressedThisFrame)
         {
             currentCursorIndex++;
@@ -55,6 +61,7 @@ public class PlayerHandController : MonoBehaviour
             UpdateVisuals();
         }
 
+        //  スペースキー（選択・解除）
         if (keyboard.spaceKey.wasPressedThisFrame)
         {
             if (selectedIndices.Contains(currentCursorIndex))
@@ -63,10 +70,84 @@ public class PlayerHandController : MonoBehaviour
             }
             else
             {
+                if (selectedIndices.Count >= 4)
+                {
+                    int oldestIndex = selectedIndices[0];
+                    selectedIndices.RemoveAt(0);
+                    Debug.Log($"【枚数制限】を超えたため、({oldestIndex + 1}枚目)を解除しました。");
+                }
+
                 selectedIndices.Add(currentCursorIndex);
             }
+
             UpdateVisuals();
+
+            LogSelectedCards();
         }
+
+        if (keyboard.enterKey.wasPressedThisFrame || keyboard.numpadEnterKey.wasPressedThisFrame)
+        {
+            PlayCardAtCursor();
+        }
+    }
+
+    private void LogSelectedCards()
+    {
+        if (gameManager == null) return;
+
+        List<string> cardNames = new List<string>();
+        List<Card> myHand = gameManager.GetPlayerHandData(0);
+
+        foreach (int index in selectedIndices)
+        {
+            if (myHand != null && index >= 0 && index < myHand.Count)
+            {
+                Card card = myHand[index];
+                if (card.suit == Card.SuitType.Joker) cardNames.Add("Joker");
+                else cardNames.Add($"{card.suit}({card.number})");
+            }
+        }
+
+        if (cardNames.Count > 0)
+        {
+            Debug.Log($"【現在選択中のカード一覧（計 {cardNames.Count} 枚）】: " + string.Join(" → ", cardNames));
+        }
+        else
+        {
+            Debug.Log("【現在選択中のカード一覧】: なし");
+        }
+    }
+
+    private void PlayCardAtCursor()
+    {
+        if (currentCursorIndex < 0 || currentCursorIndex >= cardObjects.Count) return;
+
+        GameObject targetCardObj = cardObjects[currentCursorIndex];
+        cardObjects.RemoveAt(currentCursorIndex);
+        Destroy(targetCardObj);
+
+        if (gameManager != null)
+        {
+            gameManager.RemoveCardFromData(currentCursorIndex);
+        }
+
+        selectedIndices.Remove(currentCursorIndex);
+
+        if (cardObjects.Count > 0)
+        {
+            if (currentCursorIndex >= cardObjects.Count)
+            {
+                currentCursorIndex = cardObjects.Count - 1;
+            }
+        }
+        else
+        {
+            currentCursorIndex = 0;
+            if (cursorArrow != null) cursorArrow.gameObject.SetActive(false);
+            Debug.Log("上がり");
+        }
+
+        UpdateVisuals();
     }
 
     private void UpdateVisuals()
@@ -79,19 +160,14 @@ public class PlayerHandController : MonoBehaviour
             RectTransform rect = cardObj.GetComponent<RectTransform>();
             if (rect != null)
             {
-                float targetY = selectedIndices.Contains(i) ? 40f : 0f;
+                float targetY = selectedIndices.Contains(i) ? 0.5f : 0f;
                 rect.localPosition = new Vector3(rect.localPosition.x, targetY, rect.localPosition.z);
 
                 if (i == currentCursorIndex && cursorArrow != null)
                 {
                     float arrowY = targetY + arrowOffsetY;
                     cursorArrow.localPosition = new Vector3(rect.localPosition.x, arrowY, cursorArrow.localPosition.z);
-
                     cursorArrow.sizeDelta = new Vector2(arrowWidth, arrowHeight);
-
-                    Debug.Log($"【位置確認】選択中のカード({i + 1}枚目)の座標: X={rect.localPosition.x:F1}, Y={rect.localPosition.y:F1} | " +
-                              $"矢印の座標: X={cursorArrow.localPosition.x:F1}, Y={cursorArrow.localPosition.y:F1} | " +
-                              $"矢印サイズ: {arrowWidth} x {arrowHeight}");
                 }
             }
         }
@@ -101,5 +177,6 @@ public class PlayerHandController : MonoBehaviour
             cursorArrow.SetAsLastSibling();
         }
     }
+
 }
 
