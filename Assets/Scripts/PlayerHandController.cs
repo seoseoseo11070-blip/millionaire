@@ -31,6 +31,9 @@ public class PlayerHandController : MonoBehaviour
 
         if (cursorArrow != null)
         {
+            cursorArrow.anchorMin = new Vector2(0.5f, 0.5f);
+            cursorArrow.anchorMax = new Vector2(0.5f, 0.5f);
+            cursorArrow.pivot = new Vector2(0.5f, 0.5f);
             cursorArrow.gameObject.SetActive(cardObjects.Count > 0);
         }
         UpdateVisuals();
@@ -175,6 +178,9 @@ public class PlayerHandController : MonoBehaviour
                 {
                     float arrowY = targetY + arrowOffsetY;
                     cursorArrow.localPosition = new Vector3(rect.localPosition.x, arrowY, cursorArrow.localPosition.z);
+                    Vector3 cardWroldPos = rect.position;
+                    float halfHeightWorld = rect.rect.height * 0.5f * rect.lossyScale.y;
+                    cursorArrow.position = new Vector3(cardWroldPos.x, cardWroldPos.y + halfHeightWorld + arrowOffsetY, cursorArrow.position.z);
                     cursorArrow.sizeDelta = new Vector2(arrowWidth, arrowHeight);
                 }
             }
