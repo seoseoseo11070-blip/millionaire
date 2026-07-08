@@ -10,6 +10,10 @@ public class PlayerHandController : MonoBehaviour
     [Tooltip("カードから矢印までの高さ")]
     [SerializeField] private float arrowOffsetY = 0.5f;
 
+    // --- 【新機能】矢印の横の位置（X座標）を自由に調整できる入力枠 ---
+    [Tooltip("矢印の左右の位置微調整")]
+    [SerializeField] private float arrowOffsetX = 3f;
+
     [Tooltip("矢印の横幅")]
     [SerializeField] private float arrowWidth = 50f;
     [Tooltip("矢印の縦幅")]
@@ -46,7 +50,6 @@ public class PlayerHandController : MonoBehaviour
         var keyboard = Keyboard.current;
         if (keyboard == null) return;
 
-        //  矢印キー左
         if (keyboard.leftArrowKey.wasPressedThisFrame)
         {
             currentCursorIndex--;
@@ -54,7 +57,6 @@ public class PlayerHandController : MonoBehaviour
             UpdateVisuals();
         }
 
-        //  矢印キー右
         if (keyboard.rightArrowKey.wasPressedThisFrame)
         {
             currentCursorIndex++;
@@ -62,7 +64,6 @@ public class PlayerHandController : MonoBehaviour
             UpdateVisuals();
         }
 
-        // スペースキー
         if (keyboard.spaceKey.wasPressedThisFrame)
         {
             if (selectedIndices.Contains(currentCursorIndex))
@@ -81,7 +82,6 @@ public class PlayerHandController : MonoBehaviour
             LogSelectedCards();
         }
 
-        // ■ Enterキー
         if (keyboard.enterKey.wasPressedThisFrame || keyboard.numpadEnterKey.wasPressedThisFrame)
         {
             TryPlayOrPassSelectedCards();
@@ -134,9 +134,7 @@ public class PlayerHandController : MonoBehaviour
 
         if (canPlay)
         {
-
             selectedIndices.Clear();
-
             if (cardObjects.Count > 0)
             {
                 if (currentCursorIndex >= cardObjects.Count)
@@ -148,7 +146,7 @@ public class PlayerHandController : MonoBehaviour
             {
                 currentCursorIndex = 0;
                 if (cursorArrow != null) cursorArrow.gameObject.SetActive(false);
-                Debug.Log("上がりです");
+                Debug.Log("上がり");
             }
         }
         else
@@ -177,10 +175,11 @@ public class PlayerHandController : MonoBehaviour
                 if (i == currentCursorIndex && cursorArrow != null)
                 {
                     float arrowY = targetY + arrowOffsetY;
+                    float arrowX = rect.localPosition.x + arrowOffsetX;
                     cursorArrow.localPosition = new Vector3(rect.localPosition.x, arrowY, cursorArrow.localPosition.z);
-                    Vector3 cardWroldPos = rect.position;
+                    Vector3 cardWorldPos = rect.position;
                     float halfHeightWorld = rect.rect.height * 0.5f * rect.lossyScale.y;
-                    cursorArrow.position = new Vector3(cardWroldPos.x, cardWroldPos.y + halfHeightWorld + arrowOffsetY, cursorArrow.position.z);
+                    cursorArrow.position = new Vector3(cardWorldPos.x + arrowOffsetX, cardWorldPos.y + halfHeightWorld + arrowOffsetY, cursorArrow.position.z);
                     cursorArrow.sizeDelta = new Vector2(arrowWidth, arrowHeight);
                 }
             }
@@ -192,4 +191,5 @@ public class PlayerHandController : MonoBehaviour
         }
     }
 }
+
 

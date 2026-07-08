@@ -3,7 +3,8 @@
 --- !u!78 &1
 TagManager:
   serializedVersion: 3
-  tags: []
+  tags:
+  - New tag
   layers:
   - Default
   - TransparentFX
@@ -11,7 +12,7 @@ TagManager:
   - 
   - Water
   - UI
-  - 
+  - Overlay
   - 
   - 
   - 
@@ -44,6 +45,9 @@ TagManager:
   - name: New Layer 1
     uniqueID: 1854012795
     locked: 0
+  - name: New Layer 2
+    uniqueID: 3920294579
+    locked: 0
   m_RenderingLayers:
   - Default
   - Light Layer 1
@@ -54,3 +58,4 @@ TagManager:
   - Light Layer 6
   - Light Layer 7
   - Layer 8
+  m_MigratedRenderPipelines: []

@@ -27,6 +27,12 @@ public class GameManager : MonoBehaviour
     [SerializeField] private Sprite[] cardSprites;
     [SerializeField] private PlayerHandController handController;
 
+    [Header("カードのサイズ調整")]
+    [Tooltip("カードの横幅")]
+    [SerializeField] private float cardWidth = 2.85f;
+    [Tooltip("カードの縦幅")]
+    [SerializeField] private float cardHeight = 2.85f;
+
     private List<Card> deck = new List<Card>();
     private List<List<Card>> playerHands = new List<List<Card>>();
 
@@ -150,6 +156,7 @@ public class GameManager : MonoBehaviour
             RectTransform rect = newCard.GetComponent<RectTransform>();
             if (rect != null)
             {
+                rect.sizeDelta = new Vector2(cardWidth, cardHeight);
                 Vector3 originalScale = cardPrefab.GetComponent<RectTransform>().localScale;
                 rect.localScale = originalScale;
 
@@ -181,7 +188,6 @@ public class GameManager : MonoBehaviour
             handController.SetupHand(spawnedCardObjects, this);
         }
     }
-    // 
     private System.Collections.IEnumerator AnimateMultiShuffleAndSortMyHand()
     {
         List<Card> myHand = playerHands[0];
@@ -191,7 +197,7 @@ public class GameManager : MonoBehaviour
 
         RectTransform handAreaRect = handArea.GetComponent<RectTransform>();
         float spacing = layoutGroup != null ? layoutGroup.spacing : -30f;
-        float cardWidth = cardPrefab.GetComponent<RectTransform>().rect.width;
+
         float totalWidth = (cardWidth * spawnedCardObjects.Count) + (spacing * (spawnedCardObjects.Count - 1));
         float startX = -totalWidth / 2f + cardWidth / 2f;
 
@@ -219,6 +225,8 @@ public class GameManager : MonoBehaviour
                     cardRect.anchorMin = new Vector2(0.5f, 0.5f);
                     cardRect.anchorMax = new Vector2(0.5f, 0.5f);
                     cardRect.pivot = new Vector2(0.5f, 0.5f);
+
+                    cardRect.sizeDelta = new Vector2(cardWidth, cardHeight);
                     float posX = startX + i * (cardWidth + spacing);
                     cardRect.anchoredPosition = new Vector2(posX, 0f);
                 }
@@ -270,8 +278,12 @@ public class GameManager : MonoBehaviour
                 int originalIndex = spawnedCardObjects.IndexOf(sortedObjects[i]);
                 if (originalIndex != -1)
                 {
-                    sortedObjects[i].GetComponent<RectTransform>().anchoredPosition =
-                        Vector2.Lerp(startPositions[originalIndex], targetPositions[i], t);
+                    RectTransform cardRect = sortedObjects[i].GetComponent<RectTransform>();
+                    if (cardRect != null)
+                    {
+                        cardRect.sizeDelta = new Vector2(cardWidth, cardHeight);
+                        cardRect.anchoredPosition = Vector2.Lerp(startPositions[originalIndex], targetPositions[i], t);
+                    }
                 }
             }
             yield return null;
@@ -279,7 +291,12 @@ public class GameManager : MonoBehaviour
 
         for (int i = 0; i < sortedObjects.Count; i++)
         {
-            sortedObjects[i].GetComponent<RectTransform>().anchoredPosition = targetPositions[i];
+            RectTransform cardRect = sortedObjects[i].GetComponent<RectTransform>();
+            if (cardRect != null)
+            {
+                cardRect.sizeDelta = new Vector2(cardWidth, cardHeight);
+                cardRect.anchoredPosition = targetPositions[i];
+            }
         }
 
         spawnedCardObjects = sortedObjects;
@@ -290,7 +307,7 @@ public class GameManager : MonoBehaviour
 
     public void ProcessPass()
     {
-        Debug.Log("➡パス");
+        Debug.Log("パス");
     }
 
     public bool CheckAndPlayCards(List<int> indices)
@@ -326,10 +343,7 @@ public class GameManager : MonoBehaviour
 
             foreach (Card card in selectedCards)
             {
-                if (card.suit == Card.SuitType.Joker)
-                {
-                    jokerCount++;
-                }
+                if (card.suit == Card.SuitType.Joker) jokerCount++;
                 else
                 {
                     kaidanSuit = card.suit;
@@ -337,7 +351,6 @@ public class GameManager : MonoBehaviour
                 }
             }
 
-            // マークがすべて統一されているか
             bool suitMatch = true;
             foreach (Card card in selectedCards)
             {
@@ -346,8 +359,7 @@ public class GameManager : MonoBehaviour
 
             if (suitMatch)
             {
-                strengths.Sort(); // 弱い順に並び替え
-
+                strengths.Sort();
                 if (jokerCount == 0)
                 {
                     bool continuous = true;
@@ -369,10 +381,7 @@ public class GameManager : MonoBehaviour
             }
         }
 
-        if (!isPair && !isKaidan)
-        {
-            return false;
-        }
+        if (!isPair && !isKaidan) return false;
 
         List<GameObject> objectsToDestroy = new List<GameObject>();
         foreach (int index in indices)
@@ -388,7 +397,6 @@ public class GameManager : MonoBehaviour
             Destroy(obj);
         }
 
-        // 強さ判定の基準点を算出
         int selectedStrength = 0;
         foreach (Card card in selectedCards)
         {
@@ -406,20 +414,18 @@ public class GameManager : MonoBehaviour
         if (isPair && selectedCards.Count == 4)
         {
             isRevolution = !isRevolution;
-            Debug.Log($"革命: {isRevolution}");
+            Debug.Log($"通常の革命現在の革命状態: {isRevolution}");
         }
         else if (isKaidan)
         {
-            if (selectedCards.Count == 3)
-            {
-                Debug.Log($"階段");
-            }
+            if (selectedCards.Count == 3) Debug.Log($"3枚の階段");
             else if (selectedCards.Count == 4)
             {
                 isRevolution = !isRevolution;
-                Debug.Log($"階段革命: {isRevolution}");
+                Debug.Log($"4枚の【階段革命】現在の革命状態: {isRevolution}");
             }
         }
+
         List<string> playedNames = new List<string>();
         foreach (Card card in selectedCards)
         {
@@ -428,8 +434,6 @@ public class GameManager : MonoBehaviour
         }
         string modeType = isKaidan ? "階段" : "ペア";
         Debug.Log($"場にカードを {selectedCards.Count} 枚({modeType})出しました！: " + string.Join(", ", playedNames));
-        Debug.Log($"革命中: {isRevolution} ");
-
         return true;
     }
 
