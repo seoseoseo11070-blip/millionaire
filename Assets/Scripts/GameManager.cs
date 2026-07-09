@@ -27,11 +27,12 @@ public class GameManager : MonoBehaviour
     [SerializeField] private Sprite[] cardSprites;
     [SerializeField] private PlayerHandController handController;
 
+    [Header("4つの場の設定")]
+    [SerializeField] private Transform[] fieldSlots = new Transform[4];
+
     [Header("カードのサイズ調整")]
-    [Tooltip("カードの横幅")]
-    [SerializeField] private float cardWidth = 2.85f;
-    [Tooltip("カードの縦幅")]
-    [SerializeField] private float cardHeight = 2.85f;
+    [SerializeField] private float cardWidth = 100f;
+    [SerializeField] private float cardHeight = 140f;
 
     private List<Card> deck = new List<Card>();
     private List<List<Card>> playerHands = new List<List<Card>>();
@@ -57,6 +58,8 @@ public class GameManager : MonoBehaviour
         currentFieldCardStrength = 0;
         isRevolution = false;
 
+        ClearAllFieldSlots();
+
         CreateAdvancedDeck();
         ShuffleDeck();
 
@@ -69,6 +72,17 @@ public class GameManager : MonoBehaviour
         DistributeCards(playerCount);
         DebugLogHands();
         DisplayMyHand();
+    }
+
+    private void ClearAllFieldSlots()
+    {
+        foreach (Transform slot in fieldSlots)
+        {
+            if (slot != null)
+            {
+                foreach (Transform child in slot) Destroy(child.gameObject);
+            }
+        }
     }
 
     private void CreateAdvancedDeck()
@@ -225,7 +239,6 @@ public class GameManager : MonoBehaviour
                     cardRect.anchorMin = new Vector2(0.5f, 0.5f);
                     cardRect.anchorMax = new Vector2(0.5f, 0.5f);
                     cardRect.pivot = new Vector2(0.5f, 0.5f);
-
                     cardRect.sizeDelta = new Vector2(cardWidth, cardHeight);
                     float posX = startX + i * (cardWidth + spacing);
                     cardRect.anchoredPosition = new Vector2(posX, 0f);
@@ -309,7 +322,6 @@ public class GameManager : MonoBehaviour
     {
         Debug.Log("パス");
     }
-
     public bool CheckAndPlayCards(List<int> indices)
     {
         List<Card> myHand = playerHands[0];
@@ -383,6 +395,8 @@ public class GameManager : MonoBehaviour
 
         if (!isPair && !isKaidan) return false;
 
+        ClearAllFieldSlots();
+
         List<GameObject> objectsToDestroy = new List<GameObject>();
         foreach (int index in indices)
         {
@@ -395,6 +409,37 @@ public class GameManager : MonoBehaviour
         foreach (GameObject obj in objectsToDestroy)
         {
             Destroy(obj);
+        }
+
+        int playCount = selectedCards.Count;
+        for (int i = 0; i < playCount; i++)
+        {
+            if (i < fieldSlots.Length && fieldSlots[i] != null && cardPrefab != null)
+            {
+                GameObject fieldedCard = Instantiate(cardPrefab, fieldSlots[i]);
+
+                RectTransform fieldRect = fieldedCard.GetComponent<RectTransform>();
+                if (fieldRect != null)
+                {
+                    fieldRect.anchorMin = new Vector2(0.5f, 0.5f);
+                    fieldRect.anchorMax = new Vector2(0.5f, 0.5f);
+                    fieldRect.pivot = new Vector2(0.5f, 0.5f);
+                    fieldRect.anchoredPosition = Vector2.zero;
+                    fieldRect.sizeDelta = new Vector2(cardWidth, cardHeight);
+                }
+
+                Image cardImage = fieldedCard.GetComponent<Image>();
+                if (cardImage == null) cardImage = fieldedCard.GetComponentInChildren<Image>();
+
+                if (cardImage != null)
+                {
+                    int spriteIndex = selectedCards[i].id - 1;
+                    if (spriteIndex >= 0 && spriteIndex < cardSprites.Length && cardSprites[spriteIndex] != null)
+                    {
+                        cardImage.sprite = cardSprites[spriteIndex];
+                    }
+                }
+            }
         }
 
         int selectedStrength = 0;
@@ -414,15 +459,15 @@ public class GameManager : MonoBehaviour
         if (isPair && selectedCards.Count == 4)
         {
             isRevolution = !isRevolution;
-            Debug.Log($"通常の革命現在の革命状態: {isRevolution}");
+            Debug.Log($"革命,現在の革命状態: {isRevolution}");
         }
         else if (isKaidan)
         {
-            if (selectedCards.Count == 3) Debug.Log($"3枚の階段");
+            if (selectedCards.Count == 3) Debug.Log($"階段");
             else if (selectedCards.Count == 4)
             {
                 isRevolution = !isRevolution;
-                Debug.Log($"4枚の【階段革命】現在の革命状態: {isRevolution}");
+                Debug.Log($"階段革命,現在の革命状態: {isRevolution}");
             }
         }
 
