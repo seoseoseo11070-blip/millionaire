@@ -10,8 +10,7 @@ public class PlayerHandController : MonoBehaviour
     [Tooltip("カードから矢印までの高さ")]
     [SerializeField] private float arrowOffsetY = 0.5f;
 
-    // --- 【新機能】矢印の横の位置（X座標）を自由に調整できる入力枠 ---
-    [Tooltip("矢印の左右の位置微調整")]
+    [Tooltip("矢印の位置調整")]
     [SerializeField] private float arrowOffsetX = 3f;
 
     [Tooltip("矢印の横幅")]
