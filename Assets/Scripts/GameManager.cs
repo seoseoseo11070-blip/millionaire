@@ -28,11 +28,15 @@ public class GameManager : MonoBehaviour
     [SerializeField] private PlayerHandController handController;
 
     [Header("4つの場の設定")]
-    [SerializeField] private Transform[] fieldSlots = new Transform[4];
+    [SerializeField] private Transform[] fieldSlots;
 
     [Header("カードのサイズ調整")]
     [SerializeField] private float cardWidth = 100f;
     [SerializeField] private float cardHeight = 140f;
+
+    [Header("場のトランプの調整")]
+    [Range(0.1f, 1.0f)]
+    [SerializeField] private float fieldCardScaleY = 0.7f;
 
     private List<Card> deck = new List<Card>();
     private List<List<Card>> playerHands = new List<List<Card>>();
@@ -195,127 +199,91 @@ public class GameManager : MonoBehaviour
         }
 
         yield return new WaitForSeconds(1.0f);
-        yield return StartCoroutine(AnimateMultiShuffleAndSortMyHand());
-
-        if (handController != null)
-        {
-            handController.SetupHand(spawnedCardObjects, this);
-        }
+        yield return StartCoroutine(AnimateHandSort());
     }
-    private System.Collections.IEnumerator AnimateMultiShuffleAndSortMyHand()
+
+    private System.Collections.IEnumerator AnimateHandSort()
     {
         List<Card> myHand = playerHands[0];
 
         HorizontalLayoutGroup layoutGroup = handArea.GetComponent<HorizontalLayoutGroup>();
         if (layoutGroup != null) layoutGroup.enabled = false;
 
-        RectTransform handAreaRect = handArea.GetComponent<RectTransform>();
-        float spacing = layoutGroup != null ? layoutGroup.spacing : -30f;
 
+        float spacing = layoutGroup != null ? layoutGroup.spacing : -30f;
         float totalWidth = (cardWidth * spawnedCardObjects.Count) + (spacing * (spawnedCardObjects.Count - 1));
         float startX = -totalWidth / 2f + cardWidth / 2f;
 
-        int shuffleCount = 4;
-        for (int step = 0; step < shuffleCount; step++)
+        for (int i = 0; i < spawnedCardObjects.Count; i++)
         {
-            for (int i = spawnedCardObjects.Count - 1; i > 0; i--)
-            {
-                int r = Random.Range(0, i + 1);
-
-                GameObject tmpObj = spawnedCardObjects[i];
-                spawnedCardObjects[i] = spawnedCardObjects[r];
-                spawnedCardObjects[r] = tmpObj;
-
-                Card tmpData = spawnedCardDatas[i];
-                spawnedCardDatas[i] = spawnedCardDatas[r];
-                spawnedCardDatas[r] = tmpData;
-            }
-
-            for (int i = 0; i < spawnedCardObjects.Count; i++)
-            {
-                RectTransform cardRect = spawnedCardObjects[i].GetComponent<RectTransform>();
-                if (cardRect != null)
-                {
-                    cardRect.anchorMin = new Vector2(0.5f, 0.5f);
-                    cardRect.anchorMax = new Vector2(0.5f, 0.5f);
-                    cardRect.pivot = new Vector2(0.5f, 0.5f);
-                    cardRect.sizeDelta = new Vector2(cardWidth, cardHeight);
-                    float posX = startX + i * (cardWidth + spacing);
-                    cardRect.anchoredPosition = new Vector2(posX, 0f);
-                }
-                spawnedCardObjects[i].transform.SetAsLastSibling();
-            }
-
-            yield return new WaitForSeconds(0.1f);
-        }
-
-        List<Vector2> startPositions = new List<Vector2>();
-        foreach (GameObject obj in spawnedCardObjects)
-        {
-            startPositions.Add(obj.GetComponent<RectTransform>().anchoredPosition);
-        }
-        yield return new WaitForSeconds(0.3f);
-
-        myHand.Sort((a, b) => b.strength.CompareTo(a.strength));
-
-        List<GameObject> sortedObjects = new List<GameObject>();
-        foreach (Card card in myHand)
-        {
-            int dataIndex = spawnedCardDatas.IndexOf(card);
-            if (dataIndex != -1)
-            {
-                GameObject cardObj = spawnedCardObjects[dataIndex];
-                sortedObjects.Add(cardObj);
-                cardObj.transform.SetAsLastSibling();
-            }
-        }
-
-        List<Vector2> targetPositions = new List<Vector2>();
-        for (int i = 0; i < sortedObjects.Count; i++)
-        {
-            float posX = startX + i * (cardWidth + spacing);
-            targetPositions.Add(new Vector2(posX, 0f));
-        }
-
-        float elapsed = 0f;
-        float duration = 0.5f;
-
-        while (elapsed < duration)
-        {
-            elapsed += Time.deltaTime;
-            float t = elapsed / duration;
-            t = Mathf.SmoothStep(0f, 1f, t);
-
-            for (int i = 0; i < sortedObjects.Count; i++)
-            {
-                int originalIndex = spawnedCardObjects.IndexOf(sortedObjects[i]);
-                if (originalIndex != -1)
-                {
-                    RectTransform cardRect = sortedObjects[i].GetComponent<RectTransform>();
-                    if (cardRect != null)
-                    {
-                        cardRect.sizeDelta = new Vector2(cardWidth, cardHeight);
-                        cardRect.anchoredPosition = Vector2.Lerp(startPositions[originalIndex], targetPositions[i], t);
-                    }
-                }
-            }
-            yield return null;
-        }
-
-        for (int i = 0; i < sortedObjects.Count; i++)
-        {
-            RectTransform cardRect = sortedObjects[i].GetComponent<RectTransform>();
+            RectTransform cardRect = spawnedCardObjects[i].GetComponent<RectTransform>();
             if (cardRect != null)
             {
+                cardRect.anchorMin = new Vector2(0.5f, 0.5f);
+                cardRect.anchorMax = new Vector2(0.5f, 0.5f);
+                cardRect.pivot = new Vector2(0.5f, 0.5f);
                 cardRect.sizeDelta = new Vector2(cardWidth, cardHeight);
-                cardRect.anchoredPosition = targetPositions[i];
+                float posX = startX + i * (cardWidth + spacing);
+                cardRect.anchoredPosition = new Vector2(posX, 0f);
+            }
+            spawnedCardObjects[i].transform.SetAsLastSibling();
+        }
+
+        List<Card> targetGoalOrder = new List<Card>(myHand);
+        if (isRevolution)
+        {
+            targetGoalOrder.Sort((a, b) => a.strength.CompareTo(b.strength));
+        }
+        else
+        {
+            targetGoalOrder.Sort((a, b) => b.strength.CompareTo(a.strength));
+        }
+
+        for (int i = 0; i < spawnedCardObjects.Count; i++)
+        {
+            Card idealCard = targetGoalOrder[i];
+            int currentPosOfIdealCard = spawnedCardDatas.IndexOf(idealCard);
+
+            if (currentPosOfIdealCard == i) continue;
+
+            if (currentPosOfIdealCard != -1)
+            {
+                GameObject cardObjA = spawnedCardObjects[i];
+                Card cardDataA = spawnedCardDatas[i];
+
+                GameObject cardObjB = spawnedCardObjects[currentPosOfIdealCard];
+                Card cardDataB = spawnedCardDatas[currentPosOfIdealCard];
+
+                spawnedCardDatas[i] = cardDataB;
+                spawnedCardDatas[currentPosOfIdealCard] = cardDataA;
+
+                myHand[i] = cardDataB;
+                myHand[currentPosOfIdealCard] = cardDataA;
+
+                Image imageA = cardObjA.GetComponent<Image>();
+                if (imageA == null) imageA = cardObjA.GetComponentInChildren<Image>();
+
+                Image imageB = cardObjB.GetComponent<Image>();
+                if (imageB == null) imageB = cardObjB.GetComponentInChildren<Image>();
+
+                if (imageA != null && imageB != null)
+                {
+                    Sprite spriteTmp = imageA.sprite;
+                    imageA.sprite = imageB.sprite;
+                    imageB.sprite = spriteTmp;
+                }
+
+                yield return new WaitForSeconds(0.2f);
             }
         }
 
-        spawnedCardObjects = sortedObjects;
-        spawnedCardDatas = new List<Card>(myHand);
-
         if (layoutGroup != null) layoutGroup.enabled = true;
+
+        if (handController != null)
+        {
+            handController.SetupHand(spawnedCardObjects, this);
+        }
+
     }
 
     public void ProcessPass()
@@ -400,7 +368,12 @@ public class GameManager : MonoBehaviour
         List<GameObject> objectsToDestroy = new List<GameObject>();
         foreach (int index in indices)
         {
-            objectsToDestroy.Add(spawnedCardObjects[index]);
+            GameObject obj = spawnedCardObjects[index];
+
+            obj.transform.SetParent(null);
+            obj.SetActive(false);
+
+            objectsToDestroy.Add(obj);
             myHand.RemoveAt(index);
             spawnedCardObjects.RemoveAt(index);
             spawnedCardDatas.RemoveAt(index);
@@ -410,6 +383,24 @@ public class GameManager : MonoBehaviour
         {
             Destroy(obj);
         }
+
+        HorizontalLayoutGroup layoutGroup = handArea.GetComponent<HorizontalLayoutGroup>();
+        if (layoutGroup != null) layoutGroup.enabled = false;
+
+        float spacing = layoutGroup != null ? layoutGroup.spacing : -30f;
+        float totalWidth = (cardWidth * spawnedCardObjects.Count) + (spacing * (spawnedCardObjects.Count - 1));
+        float startX = -totalWidth / 2f + cardWidth / 2f;
+
+        for (int i = 0; i < spawnedCardObjects.Count; i++)
+        {
+            RectTransform cardRect = spawnedCardObjects[i].GetComponent<RectTransform>();
+            if (cardRect != null)
+            {
+                float posX = startX + i * (cardWidth + spacing);
+                cardRect.anchoredPosition = new Vector2(posX, 0f);
+            }
+        }
+        if (layoutGroup != null) layoutGroup.enabled = true;
 
         int playCount = selectedCards.Count;
         for (int i = 0; i < playCount; i++)
@@ -426,6 +417,7 @@ public class GameManager : MonoBehaviour
                     fieldRect.pivot = new Vector2(0.5f, 0.5f);
                     fieldRect.anchoredPosition = Vector2.zero;
                     fieldRect.sizeDelta = new Vector2(cardWidth, cardHeight);
+                    fieldRect.localScale = new Vector3(1f, fieldCardScaleY, 1f);
                 }
 
                 Image cardImage = fieldedCard.GetComponent<Image>();
@@ -456,10 +448,14 @@ public class GameManager : MonoBehaviour
         currentFieldCardCount = selectedCards.Count;
         currentFieldCardStrength = selectedStrength;
 
+        // 4. 革命のフラグ判定
+        bool triggerSort = false;
+
         if (isPair && selectedCards.Count == 4)
         {
             isRevolution = !isRevolution;
-            Debug.Log($"革命,現在の革命状態: {isRevolution}");
+            Debug.Log($"革命現在の革命状態: {isRevolution}");
+            triggerSort = true;
         }
         else if (isKaidan)
         {
@@ -467,7 +463,8 @@ public class GameManager : MonoBehaviour
             else if (selectedCards.Count == 4)
             {
                 isRevolution = !isRevolution;
-                Debug.Log($"階段革命,現在の革命状態: {isRevolution}");
+                Debug.Log($"階段革命現在の革命状態: {isRevolution}");
+                triggerSort = true;
             }
         }
 
@@ -478,7 +475,13 @@ public class GameManager : MonoBehaviour
             else playedNames.Add($"{card.suit}({card.number})");
         }
         string modeType = isKaidan ? "階段" : "ペア";
-        Debug.Log($"場にカードを {selectedCards.Count} 枚({modeType})出しました！: " + string.Join(", ", playedNames));
+        Debug.Log($"★場にカードを {selectedCards.Count} 枚({modeType})出しました！: " + string.Join(", ", playedNames));
+
+        if (triggerSort)
+        {
+            StartCoroutine(AnimateHandSort());
+        }
+
         return true;
     }
 
