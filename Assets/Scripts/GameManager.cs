@@ -27,6 +27,9 @@ public class GameManager : MonoBehaviour
     [SerializeField] private Sprite[] cardSprites;
     [SerializeField] private PlayerHandController handController;
 
+    [Header("NPCの設定")]
+    [SerializeField] private NPCController npcController;
+
     [Header("4つの場の設定")]
     [SerializeField] private Transform[] fieldSlots;
 
@@ -34,7 +37,8 @@ public class GameManager : MonoBehaviour
     [SerializeField] private float cardWidth = 100f;
     [SerializeField] private float cardHeight = 140f;
 
-    [Header("場のトランプの調整")]
+    [Header("場のトランプの立体感調整")]
+    [Tooltip("場に出たカードの縦の潰し具合")]
     [Range(0.1f, 1.0f)]
     [SerializeField] private float fieldCardScaleY = 0.7f;
 
@@ -47,6 +51,9 @@ public class GameManager : MonoBehaviour
     private int currentFieldCardCount = 0;
     private int currentFieldCardStrength = 0;
     private bool isRevolution = false;
+
+    private int activePlayerIndex = 0;
+    private bool isWaitingForPlayerInput = false;
 
     void Start()
     {
@@ -61,6 +68,9 @@ public class GameManager : MonoBehaviour
         currentFieldCardCount = 0;
         currentFieldCardStrength = 0;
         isRevolution = false;
+
+        activePlayerIndex = 0;
+        isWaitingForPlayerInput = false;
 
         ClearAllFieldSlots();
 
@@ -200,15 +210,15 @@ public class GameManager : MonoBehaviour
 
         yield return new WaitForSeconds(1.0f);
         yield return StartCoroutine(AnimateHandSort());
-    }
 
+        StartTurnLoop();
+    }
     private System.Collections.IEnumerator AnimateHandSort()
     {
         List<Card> myHand = playerHands[0];
 
         HorizontalLayoutGroup layoutGroup = handArea.GetComponent<HorizontalLayoutGroup>();
         if (layoutGroup != null) layoutGroup.enabled = false;
-
 
         float spacing = layoutGroup != null ? layoutGroup.spacing : -30f;
         float totalWidth = (cardWidth * spawnedCardObjects.Count) + (spacing * (spawnedCardObjects.Count - 1));
@@ -283,124 +293,61 @@ public class GameManager : MonoBehaviour
         {
             handController.SetupHand(spawnedCardObjects, this);
         }
+    }
 
+    private void StartTurnLoop()
+    {
+        Debug.Log($"現在の手番 プレイヤー {activePlayerIndex + 1}");
+
+        if (activePlayerIndex == 0)
+        {
+            isWaitingForPlayerInput = true;
+            Debug.Log("あなたの番です");
+
+            if (handController != null)
+            {
+                handController.SetupHand(spawnedCardObjects, this);
+            }
+        }
+        else
+        {
+            isWaitingForPlayerInput = false;
+            Invoke(nameof(CallNpcAI), 1.0f);
+        }
+    }
+
+    private void CallNpcAI()
+    {
+        if (npcController != null)
+        {
+            npcController.ThinkAndPlay(activePlayerIndex, playerHands[activePlayerIndex]);
+        }
+    }
+
+    public bool IsMyTurn()
+    {
+        return (activePlayerIndex == 0 && isWaitingForPlayerInput);
     }
 
     public void ProcessPass()
     {
-        Debug.Log("パス");
+        if (activePlayerIndex == 0 && isWaitingForPlayerInput)
+        {
+            Debug.Log("パスしました");
+            isWaitingForPlayerInput = false;
+            NextTurn();
+        }
     }
-    public bool CheckAndPlayCards(List<int> indices)
+
+    public void NextTurn()
     {
-        List<Card> myHand = playerHands[0];
-        List<Card> selectedCards = new List<Card>();
+        activePlayerIndex = (activePlayerIndex + 1) % 4;
+        StartTurnLoop();
+    }
 
-        foreach (int index in indices)
-        {
-            selectedCards.Add(myHand[index]);
-        }
-
-        bool isPair = false;
-        bool isKaidan = false;
-
-        int targetNumber = -1;
-        bool pairValid = true;
-        foreach (Card card in selectedCards)
-        {
-            if (card.suit != Card.SuitType.Joker)
-            {
-                if (targetNumber == -1) targetNumber = card.number;
-                else if (card.number != targetNumber) pairValid = false;
-            }
-        }
-        if (pairValid) isPair = true;
-
-        if (selectedCards.Count == 3 || selectedCards.Count == 4)
-        {
-            Card.SuitType kaidanSuit = Card.SuitType.Joker;
-            List<int> strengths = new List<int>();
-            int jokerCount = 0;
-
-            foreach (Card card in selectedCards)
-            {
-                if (card.suit == Card.SuitType.Joker) jokerCount++;
-                else
-                {
-                    kaidanSuit = card.suit;
-                    strengths.Add(card.strength);
-                }
-            }
-
-            bool suitMatch = true;
-            foreach (Card card in selectedCards)
-            {
-                if (card.suit != Card.SuitType.Joker && card.suit != kaidanSuit) suitMatch = false;
-            }
-
-            if (suitMatch)
-            {
-                strengths.Sort();
-                if (jokerCount == 0)
-                {
-                    bool continuous = true;
-                    for (int i = 0; i < strengths.Count - 1; i++)
-                    {
-                        if (strengths[i + 1] != strengths[i] + 1) continuous = false;
-                    }
-                    if (continuous) isKaidan = true;
-                }
-                else if (jokerCount == 1)
-                {
-                    int totalGap = 0;
-                    for (int i = 0; i < strengths.Count - 1; i++)
-                    {
-                        totalGap += (strengths[i + 1] - strengths[i] - 1);
-                    }
-                    if (totalGap <= 1) isKaidan = true;
-                }
-            }
-        }
-
-        if (!isPair && !isKaidan) return false;
-
+    public void PlayCpuCards(int cpuIndex, List<Card> selectedCards)
+    {
         ClearAllFieldSlots();
-
-        List<GameObject> objectsToDestroy = new List<GameObject>();
-        foreach (int index in indices)
-        {
-            GameObject obj = spawnedCardObjects[index];
-
-            obj.transform.SetParent(null);
-            obj.SetActive(false);
-
-            objectsToDestroy.Add(obj);
-            myHand.RemoveAt(index);
-            spawnedCardObjects.RemoveAt(index);
-            spawnedCardDatas.RemoveAt(index);
-        }
-
-        foreach (GameObject obj in objectsToDestroy)
-        {
-            Destroy(obj);
-        }
-
-        HorizontalLayoutGroup layoutGroup = handArea.GetComponent<HorizontalLayoutGroup>();
-        if (layoutGroup != null) layoutGroup.enabled = false;
-
-        float spacing = layoutGroup != null ? layoutGroup.spacing : -30f;
-        float totalWidth = (cardWidth * spawnedCardObjects.Count) + (spacing * (spawnedCardObjects.Count - 1));
-        float startX = -totalWidth / 2f + cardWidth / 2f;
-
-        for (int i = 0; i < spawnedCardObjects.Count; i++)
-        {
-            RectTransform cardRect = spawnedCardObjects[i].GetComponent<RectTransform>();
-            if (cardRect != null)
-            {
-                float posX = startX + i * (cardWidth + spacing);
-                cardRect.anchoredPosition = new Vector2(posX, 0f);
-            }
-        }
-        if (layoutGroup != null) layoutGroup.enabled = true;
 
         int playCount = selectedCards.Count;
         for (int i = 0; i < playCount; i++)
@@ -408,7 +355,6 @@ public class GameManager : MonoBehaviour
             if (i < fieldSlots.Length && fieldSlots[i] != null && cardPrefab != null)
             {
                 GameObject fieldedCard = Instantiate(cardPrefab, fieldSlots[i]);
-
                 RectTransform fieldRect = fieldedCard.GetComponent<RectTransform>();
                 if (fieldRect != null)
                 {
@@ -422,7 +368,6 @@ public class GameManager : MonoBehaviour
 
                 Image cardImage = fieldedCard.GetComponent<Image>();
                 if (cardImage == null) cardImage = fieldedCard.GetComponentInChildren<Image>();
-
                 if (cardImage != null)
                 {
                     int spriteIndex = selectedCards[i].id - 1;
@@ -448,24 +393,11 @@ public class GameManager : MonoBehaviour
         currentFieldCardCount = selectedCards.Count;
         currentFieldCardStrength = selectedStrength;
 
-        // 4. 革命のフラグ判定
-        bool triggerSort = false;
-
-        if (isPair && selectedCards.Count == 4)
+        if (selectedCards.Count == 4)
         {
             isRevolution = !isRevolution;
-            Debug.Log($"革命現在の革命状態: {isRevolution}");
-            triggerSort = true;
-        }
-        else if (isKaidan)
-        {
-            if (selectedCards.Count == 3) Debug.Log($"階段");
-            else if (selectedCards.Count == 4)
-            {
-                isRevolution = !isRevolution;
-                Debug.Log($"階段革命現在の革命状態: {isRevolution}");
-                triggerSort = true;
-            }
+            Debug.Log($"CPUによって革命が発動しました,現在の革命状態{isRevolution}");
+            StartCoroutine(AnimateHandSort());
         }
 
         List<string> playedNames = new List<string>();
@@ -474,15 +406,106 @@ public class GameManager : MonoBehaviour
             if (card.suit == Card.SuitType.Joker) playedNames.Add("Joker");
             else playedNames.Add($"{card.suit}({card.number})");
         }
-        string modeType = isKaidan ? "階段" : "ペア";
-        Debug.Log($"★場にカードを {selectedCards.Count} 枚({modeType})出しました！: " + string.Join(", ", playedNames));
+        Debug.Log($"プレイヤー {cpuIndex + 1} が場にカードを出しました" + string.Join(", ", playedNames));
 
-        if (triggerSort)
+        NextTurn();
+    }
+    public bool CheckAndPlaySelectedObjects(List<GameObject> selectedObjects)
+    {
+        if (activePlayerIndex != 0 || !isWaitingForPlayerInput) return false;
+
+        List<Card> myHand = playerHands[0];
+        List<Card> selectedCards = new List<Card>();
+
+        foreach (GameObject obj in selectedObjects)
         {
-            StartCoroutine(AnimateHandSort());
+            int idx = spawnedCardObjects.IndexOf(obj);
+            if (idx != -1)
+                selectedCards.Add(spawnedCardDatas[idx]);
         }
 
+        if (selectedCards.Count == 0) return false;
+
+        ClearAllFieldSlots();
+
+        for (int i = 0; i < selectedCards.Count && i < fieldSlots.Length; i++)
+        {
+            GameObject fieldCard = Instantiate(cardPrefab, fieldSlots[i]);
+            RectTransform rt = fieldCard.GetComponent<RectTransform>();
+            if (rt != null)
+            {
+                rt.anchorMin = new Vector2(0.5f, 0.5f);
+                rt.anchorMax = new Vector2(0.5f, 0.5f);
+                rt.pivot = new Vector2(0.5f, 0.5f);
+                rt.anchoredPosition = Vector2.zero;
+                rt.sizeDelta = new Vector2(cardWidth, cardHeight);
+                rt.localScale = new Vector3(1f, fieldCardScaleY, 1f);
+            }
+
+            Image img = fieldCard.GetComponentInChildren<Image>();
+            if (img != null)
+            {
+                int spriteIdx = selectedCards[i].id - 1;
+                if (spriteIdx >= 0 && spriteIdx < cardSprites.Length)
+                    img.sprite = cardSprites[spriteIdx];
+            }
+        }
+
+        // 手札から削除
+        foreach (GameObject obj in selectedObjects)
+        {
+            int idx = spawnedCardObjects.IndexOf(obj);
+            if (idx != -1)
+            {
+                myHand.Remove(spawnedCardDatas[idx]);
+                spawnedCardObjects.RemoveAt(idx);
+                spawnedCardDatas.RemoveAt(idx);
+                Destroy(obj);
+            }
+        }
+
+        // 手札再配置
+        RearrangeRemainingHand();
+
+        currentFieldCardCount = selectedCards.Count;
+        currentFieldCardStrength = selectedCards[0].suit == Card.SuitType.Joker ? 14 : selectedCards[0].strength;
+
+        if (selectedCards.Count == 4)
+        {
+            isRevolution = !isRevolution;
+            Debug.Log($"革命,現在{isRevolution}");
+        }
+
+        isWaitingForPlayerInput = false;
+        NextTurn();
+
         return true;
+    }
+
+    // 新規追加メソッド
+    private void RearrangeRemainingHand()
+    {
+        HorizontalLayoutGroup layout = handArea.GetComponent<HorizontalLayoutGroup>();
+        bool hadLayout = layout != null;
+        if (hadLayout) layout.enabled = false;
+
+        float spacing = hadLayout ? layout.spacing : -30f;
+        float totalW = (cardWidth * spawnedCardObjects.Count) + spacing * (spawnedCardObjects.Count - 1);
+        float startX = -totalW / 2f + cardWidth / 2f;
+
+        for (int i = 0; i < spawnedCardObjects.Count; i++)
+        {
+            RectTransform r = spawnedCardObjects[i].GetComponent<RectTransform>();
+            if (r != null)
+                r.anchoredPosition = new Vector2(startX + i * (cardWidth + spacing), 0);
+        }
+
+        if (hadLayout) layout.enabled = true;
+    }
+    private System.Collections.IEnumerator AnimateHandSortAndNextTurn()
+    {
+        yield return StartCoroutine(AnimateHandSort());
+        NextTurn();
     }
 
     public List<Card> GetPlayerHandData(int playerIndex)

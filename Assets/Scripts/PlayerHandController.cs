@@ -11,7 +11,7 @@ public class PlayerHandController : MonoBehaviour
     [SerializeField] private float arrowOffsetY = 0.5f;
 
     [Tooltip("矢印の位置調整")]
-    [SerializeField] private float arrowOffsetX = 3f;
+    [SerializeField] private float arrowOffsetX = 0f;
 
     [Tooltip("矢印の横幅")]
     [SerializeField] private float arrowWidth = 50f;
@@ -28,7 +28,16 @@ public class PlayerHandController : MonoBehaviour
     {
         cardObjects = spawnedCards;
         gameManager = manager;
-        currentCursorIndex = 0;
+
+        if (cardObjects != null && cardObjects.Count > 0)
+        {
+            currentCursorIndex = cardObjects.Count / 2;
+        }
+        else
+        {
+            currentCursorIndex = 0;
+        }
+
         selectedIndices.Clear();
         isInputEnabled = true;
 
@@ -65,6 +74,7 @@ public class PlayerHandController : MonoBehaviour
 
         if (keyboard.spaceKey.wasPressedThisFrame)
         {
+            currentCursorIndex = Mathf.Clamp(currentCursorIndex, 0, cardObjects.Count - 1);
             if (selectedIndices.Contains(currentCursorIndex))
             {
                 selectedIndices.Remove(currentCursorIndex);
@@ -112,6 +122,12 @@ public class PlayerHandController : MonoBehaviour
     {
         if (gameManager == null) return;
 
+        if (!gameManager.IsMyTurn())
+        {
+            Debug.LogWarning("あなたの番ではありません");
+            return;
+        }
+
         if (selectedIndices.Count == 0)
         {
             gameManager.ProcessPass();
@@ -119,34 +135,46 @@ public class PlayerHandController : MonoBehaviour
         }
 
         selectedIndices.RemoveAll(index => index < 0 || index >= cardObjects.Count);
-
         if (selectedIndices.Count == 0)
         {
             gameManager.ProcessPass();
             return;
         }
 
-        List<int> sortedIndices = new List<int>(selectedIndices);
-        sortedIndices.Sort((a, b) => b.CompareTo(a));
+        List<GameObject> selectedObjects = new List<GameObject>();
+        foreach (int index in selectedIndices)
+        {
+            if (index < cardObjects.Count)
+                selectedObjects.Add(cardObjects[index]);
+        }
 
-        bool canPlay = gameManager.CheckAndPlayCards(sortedIndices);
+        bool canPlay = gameManager.CheckAndPlaySelectedObjects(selectedObjects);
 
         if (canPlay)
         {
+            foreach (GameObject obj in selectedObjects)
+            {
+                cardObjects.Remove(obj);
+            }
             selectedIndices.Clear();
             if (cardObjects.Count > 0)
             {
-                if (currentCursorIndex >= cardObjects.Count)
+                currentCursorIndex = cardObjects.Count / 2;
+
+                if (cursorArrow != null)
                 {
-                    currentCursorIndex = cardObjects.Count - 1;
+                    cursorArrow.gameObject.SetActive(false);
                 }
             }
             else
             {
                 currentCursorIndex = 0;
-                if (cursorArrow != null) cursorArrow.gameObject.SetActive(false);
-                Debug.Log("上がり");
+                if (cursorArrow != null)
+                    cursorArrow.gameObject.SetActive(false);
             }
+
+            UpdateVisuals();
+            Invoke(nameof(ShowCursorAfterMove), 0.05f);
         }
         else
         {
@@ -155,10 +183,36 @@ public class PlayerHandController : MonoBehaviour
 
         UpdateVisuals();
     }
+    private void ShowCursorAfterMove()
+    {
+        if (cursorArrow != null && cardObjects.Count > 0)
+        {
+            cursorArrow.gameObject.SetActive(true);
+            UpdateVisuals();
+        }
+    }
 
     private void UpdateVisuals()
     {
+        if (cardObjects.Count > 0)
+        {
+            if (currentCursorIndex < 0 || currentCursorIndex >= cardObjects.Count)
+            {
+                currentCursorIndex = cardObjects.Count / 2;
+            }
+        }
+        else
+        {
+            currentCursorIndex = 0;
+            if (cursorArrow != null) cursorArrow.gameObject.SetActive(false);
+        }
+
         selectedIndices.RemoveAll(index => index < 0 || index >= cardObjects.Count);
+
+        if (cardObjects.Count > 0 && currentCursorIndex >= cardObjects.Count)
+        {
+            currentCursorIndex = cardObjects.Count - 1;
+        }
 
         for (int i = 0; i < cardObjects.Count; i++)
         {
@@ -173,12 +227,18 @@ public class PlayerHandController : MonoBehaviour
 
                 if (i == currentCursorIndex && cursorArrow != null)
                 {
-                    float arrowY = targetY + arrowOffsetY;
-                    float arrowX = rect.localPosition.x + arrowOffsetX;
-                    cursorArrow.localPosition = new Vector3(rect.localPosition.x, arrowY, cursorArrow.localPosition.z);
+                    if (!cursorArrow.gameObject.activeSelf) cursorArrow.gameObject.SetActive(true);
+
                     Vector3 cardWorldPos = rect.position;
                     float halfHeightWorld = rect.rect.height * 0.5f * rect.lossyScale.y;
-                    cursorArrow.position = new Vector3(cardWorldPos.x + arrowOffsetX, cardWorldPos.y + halfHeightWorld + arrowOffsetY, cursorArrow.position.z);
+
+                    cursorArrow.position = new Vector3(
+                        cardWorldPos.x + arrowOffsetX,
+                        cardWorldPos.y + halfHeightWorld + arrowOffsetY,
+                        cursorArrow.position.z
+                    );
+
+                    cursorArrow.localScale = Vector3.one;
                     cursorArrow.sizeDelta = new Vector2(arrowWidth, arrowHeight);
                 }
             }
@@ -190,5 +250,4 @@ public class PlayerHandController : MonoBehaviour
         }
     }
 }
-
 
