@@ -2,24 +2,6 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
-public class Card
-{
-    public enum SuitType { Spade, Heart, Diamond, Club, Joker }
-
-    public int id;
-    public SuitType suit;
-    public int number;
-    public int strength;
-
-    public Card(int id, SuitType suit, int number, int strength)
-    {
-        this.id = id;
-        this.suit = suit;
-        this.number = number;
-        this.strength = strength;
-    }
-}
-
 public class GameManager : MonoBehaviour
 {
     [SerializeField] private GameObject cardPrefab;
@@ -27,76 +9,132 @@ public class GameManager : MonoBehaviour
     [SerializeField] private Sprite[] cardSprites;
     [SerializeField] private PlayerHandController handController;
 
-    [Header("NPCの設定")]
+    [Header("NPC")]
     [SerializeField] private NPCController npcController;
 
-    [Header("4つの場の設定")]
+    [Header("場スロット")]
     [SerializeField] private Transform[] fieldSlots;
 
-    [Header("カードのサイズ調整")]
+    [Header("カードサイズ")]
     [SerializeField] private float cardWidth = 100f;
     [SerializeField] private float cardHeight = 140f;
 
-    [Header("場のトランプの立体感調整")]
-    [Tooltip("場に出たカードの縦の潰し具合")]
+    [Header("場のカードの縦潰し")]
     [Range(0.1f, 1.0f)]
     [SerializeField] private float fieldCardScaleY = 0.7f;
 
+    private readonly PlayValidator validator = new PlayValidator();
+
     private List<Card> deck = new List<Card>();
     private List<List<Card>> playerHands = new List<List<Card>>();
-
+    private List<string> roundActionLog = new List<string>();
     private List<GameObject> spawnedCardObjects = new List<GameObject>();
     private List<Card> spawnedCardDatas = new List<Card>();
 
+    private int consecutivePassCount = 0;
+    private int lastPlayPlayerIndex = -1;
     private int currentFieldCardCount = 0;
     private int currentFieldCardStrength = 0;
     private bool isRevolution = false;
 
+    private Card.SuitType? lockedSuit = null;
+    private Card.SuitType? lastPlaySuit = null;
+
+    private string currentFieldPlayType = "";
+    private bool fieldIsSingleJoker = false;
+    private int currentFieldKaidanMin = 0;
+    private int currentFieldKaidanMax = 0;
+
     private int activePlayerIndex = 0;
     private bool isWaitingForPlayerInput = false;
 
+    private bool isWaitingForSevenGive = false;
+    private int sevenGiveCount = 0;
+    private int sevenGiveToIndex = 0;
+
+    private bool isClearingField = false;
+
+    public int GetCurrentFieldCardCount() => currentFieldCardCount;
+    public int GetCurrentFieldCardStrength() => currentFieldCardStrength;
+    public bool IsRevolution() => isRevolution;
+    public bool IsWaitingForSevenGive() => isWaitingForSevenGive;
+    public int GetSevenGiveCount() => sevenGiveCount;
+    public bool IsFieldSingleJoker() => fieldIsSingleJoker;
+    public string GetCurrentFieldPlayType() => currentFieldPlayType;
+    public int GetCurrentFieldKaidanMin() => currentFieldKaidanMin;
+    public int GetCurrentFieldKaidanMax() => currentFieldKaidanMax;
+
+    public bool IsMyTurn()
+    {
+        return activePlayerIndex == 0
+            && isWaitingForPlayerInput
+            && !isWaitingForSevenGive
+            && !isClearingField;
+    }
+
+    public List<Card> GetPlayerHandData(int playerIndex)
+    {
+        if (playerIndex >= 0 && playerIndex < playerHands.Count)
+            return playerHands[playerIndex];
+        return null;
+    }
+
+    public bool TryValidatePlay(List<Card> cards, out string playType, out string error)
+    {
+        return validator.TryValidate(
+            cards,
+            currentFieldCardCount,
+            currentFieldCardStrength,
+            currentFieldPlayType,
+            isRevolution,
+            fieldIsSingleJoker,
+            lockedSuit,
+            currentFieldKaidanMin,
+            currentFieldKaidanMax,
+            out playType,
+            out error);
+    }
+
     void Start()
     {
-        StartGame(playerCount: 4);
+        StartGame(4);
     }
 
     public void StartGame(int playerCount)
     {
+        roundActionLog.Clear();
+        consecutivePassCount = 0;
+        lastPlayPlayerIndex = -1;
         spawnedCardObjects.Clear();
         spawnedCardDatas.Clear();
 
         currentFieldCardCount = 0;
         currentFieldCardStrength = 0;
+        currentFieldPlayType = "";
+        currentFieldKaidanMin = 0;
+        currentFieldKaidanMax = 0;
         isRevolution = false;
+        lockedSuit = null;
+        lastPlaySuit = null;
+        fieldIsSingleJoker = false;
+
+        isWaitingForSevenGive = false;
+        sevenGiveCount = 0;
+        isClearingField = false;
 
         activePlayerIndex = 0;
         isWaitingForPlayerInput = false;
 
         ClearAllFieldSlots();
-
         CreateAdvancedDeck();
         ShuffleDeck();
 
         playerHands.Clear();
         for (int i = 0; i < playerCount; i++)
-        {
             playerHands.Add(new List<Card>());
-        }
 
         DistributeCards(playerCount);
-        DebugLogHands();
         DisplayMyHand();
-    }
-
-    private void ClearAllFieldSlots()
-    {
-        foreach (Transform slot in fieldSlots)
-        {
-            if (slot != null)
-            {
-                foreach (Transform child in slot) Destroy(child.gameObject);
-            }
-        }
     }
 
     private void CreateAdvancedDeck()
@@ -116,6 +154,7 @@ public class GameManager : MonoBehaviour
                 currentId++;
             }
         }
+
         deck.Add(new Card(53, Card.SuitType.Joker, 0, 14));
         deck.Add(new Card(54, Card.SuitType.Joker, 0, 14));
     }
@@ -125,9 +164,7 @@ public class GameManager : MonoBehaviour
         for (int i = deck.Count - 1; i > 0; i--)
         {
             int r = Random.Range(0, i + 1);
-            Card tmp = deck[i];
-            deck[i] = deck[r];
-            deck[r] = tmp;
+            (deck[i], deck[r]) = (deck[r], deck[i]);
         }
     }
 
@@ -136,16 +173,13 @@ public class GameManager : MonoBehaviour
         int currentPlayer = 0;
         while (deck.Count > 0)
         {
-            Card card = deck[0];
+            playerHands[currentPlayer].Add(deck[0]);
             deck.RemoveAt(0);
-            playerHands[currentPlayer].Add(card);
             currentPlayer = (currentPlayer + 1) % playerCount;
         }
 
         for (int i = 1; i < playerCount; i++)
-        {
             playerHands[i].Sort((a, b) => b.strength.CompareTo(a.strength));
-        }
     }
 
     private void DisplayMyHand()
@@ -164,44 +198,37 @@ public class GameManager : MonoBehaviour
 
         foreach (Card card in myHand)
         {
-            Transform canvasTransform = handArea.parent;
-            GameObject newCard = Instantiate(cardPrefab, canvasTransform);
+            GameObject newCard = Instantiate(cardPrefab, handArea.parent);
             spawnedCardObjects.Add(newCard);
             spawnedCardDatas.Add(card);
 
-            Image cardImage = newCard.GetComponent<Image>();
-            if (cardImage == null) cardImage = newCard.GetComponentInChildren<Image>();
-
+            Image cardImage = newCard.GetComponentInChildren<Image>();
             if (cardImage != null)
             {
                 int spriteIndex = card.id - 1;
                 if (spriteIndex >= 0 && spriteIndex < cardSprites.Length && cardSprites[spriteIndex] != null)
-                {
                     cardImage.sprite = cardSprites[spriteIndex];
-                }
             }
 
             RectTransform rect = newCard.GetComponent<RectTransform>();
             if (rect != null)
             {
                 rect.sizeDelta = new Vector2(cardWidth, cardHeight);
-                Vector3 originalScale = cardPrefab.GetComponent<RectTransform>().localScale;
-                rect.localScale = originalScale;
+                rect.localScale = cardPrefab.GetComponent<RectTransform>().localScale;
 
-                Vector2 targetPosition = handArea.GetComponent<RectTransform>().anchoredPosition;
-                rect.anchoredPosition = new Vector2(targetPosition.x, targetPosition.y - 500f);
+                Vector2 target = handArea.GetComponent<RectTransform>().anchoredPosition;
+                Vector2 start = new Vector2(target.x, target.y - 500f);
+                rect.anchoredPosition = start;
 
                 float elapsed = 0f;
                 float duration = 0.15f;
-                Vector2 startPosition = rect.anchoredPosition;
-
                 while (elapsed < duration)
                 {
                     elapsed += Time.deltaTime;
-                    rect.anchoredPosition = Vector2.Lerp(startPosition, targetPosition, elapsed / duration);
+                    rect.anchoredPosition = Vector2.Lerp(start, target, elapsed / duration);
                     yield return null;
                 }
-                rect.anchoredPosition = targetPosition;
+                rect.anchoredPosition = target;
             }
 
             newCard.transform.SetParent(handArea);
@@ -210,18 +237,17 @@ public class GameManager : MonoBehaviour
 
         yield return new WaitForSeconds(1.0f);
         yield return StartCoroutine(AnimateHandSort());
-
         StartTurnLoop();
     }
+
     private System.Collections.IEnumerator AnimateHandSort()
     {
         List<Card> myHand = playerHands[0];
-
         HorizontalLayoutGroup layoutGroup = handArea.GetComponent<HorizontalLayoutGroup>();
         if (layoutGroup != null) layoutGroup.enabled = false;
 
         float spacing = layoutGroup != null ? layoutGroup.spacing : -30f;
-        float totalWidth = (cardWidth * spawnedCardObjects.Count) + (spacing * (spawnedCardObjects.Count - 1));
+        float totalWidth = (cardWidth * spawnedCardObjects.Count) + (spacing * Mathf.Max(0, spawnedCardObjects.Count - 1));
         float startX = -totalWidth / 2f + cardWidth / 2f;
 
         for (int i = 0; i < spawnedCardObjects.Count; i++)
@@ -229,189 +255,123 @@ public class GameManager : MonoBehaviour
             RectTransform cardRect = spawnedCardObjects[i].GetComponent<RectTransform>();
             if (cardRect != null)
             {
-                cardRect.anchorMin = new Vector2(0.5f, 0.5f);
-                cardRect.anchorMax = new Vector2(0.5f, 0.5f);
-                cardRect.pivot = new Vector2(0.5f, 0.5f);
+                cardRect.anchorMin = cardRect.anchorMax = cardRect.pivot = new Vector2(0.5f, 0.5f);
                 cardRect.sizeDelta = new Vector2(cardWidth, cardHeight);
-                float posX = startX + i * (cardWidth + spacing);
-                cardRect.anchoredPosition = new Vector2(posX, 0f);
+                cardRect.anchoredPosition = new Vector2(startX + i * (cardWidth + spacing), 0f);
             }
             spawnedCardObjects[i].transform.SetAsLastSibling();
         }
 
-        List<Card> targetGoalOrder = new List<Card>(myHand);
+        List<Card> targetOrder = new List<Card>(myHand);
         if (isRevolution)
-        {
-            targetGoalOrder.Sort((a, b) => a.strength.CompareTo(b.strength));
-        }
+            targetOrder.Sort((a, b) => a.strength.CompareTo(b.strength));
         else
-        {
-            targetGoalOrder.Sort((a, b) => b.strength.CompareTo(a.strength));
-        }
+            targetOrder.Sort((a, b) => b.strength.CompareTo(a.strength));
 
         for (int i = 0; i < spawnedCardObjects.Count; i++)
         {
-            Card idealCard = targetGoalOrder[i];
-            int currentPosOfIdealCard = spawnedCardDatas.IndexOf(idealCard);
+            int currentPos = spawnedCardDatas.IndexOf(targetOrder[i]);
+            if (currentPos == i || currentPos == -1) continue;
 
-            if (currentPosOfIdealCard == i) continue;
+            (spawnedCardDatas[i], spawnedCardDatas[currentPos]) = (spawnedCardDatas[currentPos], spawnedCardDatas[i]);
+            (myHand[i], myHand[currentPos]) = (myHand[currentPos], myHand[i]);
 
-            if (currentPosOfIdealCard != -1)
+            Image imageA = spawnedCardObjects[i].GetComponentInChildren<Image>();
+            Image imageB = spawnedCardObjects[currentPos].GetComponentInChildren<Image>();
+            if (imageA != null && imageB != null)
             {
-                GameObject cardObjA = spawnedCardObjects[i];
-                Card cardDataA = spawnedCardDatas[i];
-
-                GameObject cardObjB = spawnedCardObjects[currentPosOfIdealCard];
-                Card cardDataB = spawnedCardDatas[currentPosOfIdealCard];
-
-                spawnedCardDatas[i] = cardDataB;
-                spawnedCardDatas[currentPosOfIdealCard] = cardDataA;
-
-                myHand[i] = cardDataB;
-                myHand[currentPosOfIdealCard] = cardDataA;
-
-                Image imageA = cardObjA.GetComponent<Image>();
-                if (imageA == null) imageA = cardObjA.GetComponentInChildren<Image>();
-
-                Image imageB = cardObjB.GetComponent<Image>();
-                if (imageB == null) imageB = cardObjB.GetComponentInChildren<Image>();
-
-                if (imageA != null && imageB != null)
-                {
-                    Sprite spriteTmp = imageA.sprite;
-                    imageA.sprite = imageB.sprite;
-                    imageB.sprite = spriteTmp;
-                }
-
-                yield return new WaitForSeconds(0.2f);
+                Sprite tmp = imageA.sprite;
+                imageA.sprite = imageB.sprite;
+                imageB.sprite = tmp;
             }
+
+            yield return new WaitForSeconds(0.2f);
         }
 
         if (layoutGroup != null) layoutGroup.enabled = true;
-
         if (handController != null)
-        {
             handController.SetupHand(spawnedCardObjects, this);
+    }
+
+    private void RearrangeRemainingHand()
+    {
+        HorizontalLayoutGroup layout = handArea.GetComponent<HorizontalLayoutGroup>();
+        if (layout != null) layout.enabled = false;
+
+        float spacing = layout != null ? layout.spacing : -30f;
+        float totalW = (cardWidth * spawnedCardObjects.Count) + spacing * Mathf.Max(0, spawnedCardObjects.Count - 1);
+        float startX = -totalW / 2f + cardWidth / 2f;
+
+        for (int i = 0; i < spawnedCardObjects.Count; i++)
+        {
+            RectTransform r = spawnedCardObjects[i].GetComponent<RectTransform>();
+            if (r != null)
+                r.anchoredPosition = new Vector2(startX + i * (cardWidth + spacing), 0f);
         }
+
+        if (layout != null) layout.enabled = true;
     }
 
     private void StartTurnLoop()
     {
-        Debug.Log($"現在の手番 プレイヤー {activePlayerIndex + 1}");
+        if (isClearingField) return;
 
         if (activePlayerIndex == 0)
         {
             isWaitingForPlayerInput = true;
-            Debug.Log("あなたの番です");
-
             if (handController != null)
-            {
                 handController.SetupHand(spawnedCardObjects, this);
-            }
         }
         else
         {
             isWaitingForPlayerInput = false;
-            Invoke(nameof(CallNpcAI), 1.0f);
+            if (npcController != null)
+                Invoke(nameof(CallNpcAI), Random.Range(2f, 4f));
+            else
+                Debug.LogError("npcController が null です");
         }
     }
 
     private void CallNpcAI()
     {
-        if (npcController != null)
-        {
-            npcController.ThinkAndPlay(activePlayerIndex, playerHands[activePlayerIndex]);
-        }
-    }
-
-    public bool IsMyTurn()
-    {
-        return (activePlayerIndex == 0 && isWaitingForPlayerInput);
-    }
-
-    public void ProcessPass()
-    {
-        if (activePlayerIndex == 0 && isWaitingForPlayerInput)
-        {
-            Debug.Log("パスしました");
-            isWaitingForPlayerInput = false;
-            NextTurn();
-        }
+        if (npcController == null) return;
+        if (isClearingField) return;
+        if (activePlayerIndex < 0 || activePlayerIndex >= playerHands.Count) return;
+        npcController.ThinkAndPlay(activePlayerIndex, playerHands[activePlayerIndex]);
     }
 
     public void NextTurn()
     {
-        activePlayerIndex = (activePlayerIndex + 1) % 4;
+        if (isClearingField) return;
+        activePlayerIndex = (activePlayerIndex + 1) % playerHands.Count;
         StartTurnLoop();
     }
 
-    public void PlayCpuCards(int cpuIndex, List<Card> selectedCards)
+    public void ProcessPass()
     {
-        ClearAllFieldSlots();
+        if (isWaitingForSevenGive) return;
+        if (isClearingField) return;
+        if (activePlayerIndex == 0 && !isWaitingForPlayerInput) return;
 
-        int playCount = selectedCards.Count;
-        for (int i = 0; i < playCount; i++)
-        {
-            if (i < fieldSlots.Length && fieldSlots[i] != null && cardPrefab != null)
-            {
-                GameObject fieldedCard = Instantiate(cardPrefab, fieldSlots[i]);
-                RectTransform fieldRect = fieldedCard.GetComponent<RectTransform>();
-                if (fieldRect != null)
-                {
-                    fieldRect.anchorMin = new Vector2(0.5f, 0.5f);
-                    fieldRect.anchorMax = new Vector2(0.5f, 0.5f);
-                    fieldRect.pivot = new Vector2(0.5f, 0.5f);
-                    fieldRect.anchoredPosition = Vector2.zero;
-                    fieldRect.sizeDelta = new Vector2(cardWidth, cardHeight);
-                    fieldRect.localScale = new Vector3(1f, fieldCardScaleY, 1f);
-                }
+        string name = activePlayerIndex == 0 ? "あなた" : $"NPC{activePlayerIndex + 1}";
+        string message = $"{name}はパスした";
+        AddRoundAction(message);
+        Debug.Log(message);
 
-                Image cardImage = fieldedCard.GetComponent<Image>();
-                if (cardImage == null) cardImage = fieldedCard.GetComponentInChildren<Image>();
-                if (cardImage != null)
-                {
-                    int spriteIndex = selectedCards[i].id - 1;
-                    if (spriteIndex >= 0 && spriteIndex < cardSprites.Length && cardSprites[spriteIndex] != null)
-                    {
-                        cardImage.sprite = cardSprites[spriteIndex];
-                    }
-                }
-            }
-        }
+        if (activePlayerIndex == 0)
+            isWaitingForPlayerInput = false;
 
-        int selectedStrength = 0;
-        foreach (Card card in selectedCards)
-        {
-            if (card.suit != Card.SuitType.Joker)
-            {
-                selectedStrength = card.strength;
-                break;
-            }
-            selectedStrength = 14;
-        }
-
-        currentFieldCardCount = selectedCards.Count;
-        currentFieldCardStrength = selectedStrength;
-
-        if (selectedCards.Count == 4)
-        {
-            isRevolution = !isRevolution;
-            Debug.Log($"CPUによって革命が発動しました,現在の革命状態{isRevolution}");
-            StartCoroutine(AnimateHandSort());
-        }
-
-        List<string> playedNames = new List<string>();
-        foreach (Card card in selectedCards)
-        {
-            if (card.suit == Card.SuitType.Joker) playedNames.Add("Joker");
-            else playedNames.Add($"{card.suit}({card.number})");
-        }
-        Debug.Log($"プレイヤー {cpuIndex + 1} が場にカードを出しました" + string.Join(", ", playedNames));
+        consecutivePassCount++;
+        if (consecutivePassCount >= playerHands.Count - 1)
+            ClearFieldBecauseAllPassed();
 
         NextTurn();
     }
+
     public bool CheckAndPlaySelectedObjects(List<GameObject> selectedObjects)
     {
+        if (isWaitingForSevenGive) return false;
+        if (isClearingField) return false;
         if (activePlayerIndex != 0 || !isWaitingForPlayerInput) return false;
 
         List<Card> myHand = playerHands[0];
@@ -426,32 +386,14 @@ public class GameManager : MonoBehaviour
 
         if (selectedCards.Count == 0) return false;
 
-        ClearAllFieldSlots();
-
-        for (int i = 0; i < selectedCards.Count && i < fieldSlots.Length; i++)
+        if (!TryValidatePlay(selectedCards, out string playType, out string error))
         {
-            GameObject fieldCard = Instantiate(cardPrefab, fieldSlots[i]);
-            RectTransform rt = fieldCard.GetComponent<RectTransform>();
-            if (rt != null)
-            {
-                rt.anchorMin = new Vector2(0.5f, 0.5f);
-                rt.anchorMax = new Vector2(0.5f, 0.5f);
-                rt.pivot = new Vector2(0.5f, 0.5f);
-                rt.anchoredPosition = Vector2.zero;
-                rt.sizeDelta = new Vector2(cardWidth, cardHeight);
-                rt.localScale = new Vector3(1f, fieldCardScaleY, 1f);
-            }
-
-            Image img = fieldCard.GetComponentInChildren<Image>();
-            if (img != null)
-            {
-                int spriteIdx = selectedCards[i].id - 1;
-                if (spriteIdx >= 0 && spriteIdx < cardSprites.Length)
-                    img.sprite = cardSprites[spriteIdx];
-            }
+            Debug.LogWarning($"ルール違反: {error}");
+            return false;
         }
 
-        // 手札から削除
+        PlaceCardsOnField(selectedCards);
+
         foreach (GameObject obj in selectedObjects)
         {
             int idx = spawnedCardObjects.IndexOf(obj);
@@ -464,72 +406,412 @@ public class GameManager : MonoBehaviour
             }
         }
 
-        // 手札再配置
         RearrangeRemainingHand();
 
-        currentFieldCardCount = selectedCards.Count;
-        currentFieldCardStrength = selectedCards[0].suit == Card.SuitType.Joker ? 14 : selectedCards[0].strength;
+        bool wasFieldSingleJoker = fieldIsSingleJoker;
+        UpdateFieldState(selectedCards, playType, 0);
+        bool playAgain = ApplySpecialEffects(selectedCards, playType, 0, wasFieldSingleJoker);
 
-        if (selectedCards.Count == 4)
+        if (isWaitingForSevenGive)
+            return true;
+
+        if (playAgain)
         {
-            isRevolution = !isRevolution;
-            Debug.Log($"革命,現在{isRevolution}");
+            isWaitingForPlayerInput = false;
+            return true;
         }
 
         isWaitingForPlayerInput = false;
         NextTurn();
-
         return true;
     }
 
-    // 新規追加メソッド
-    private void RearrangeRemainingHand()
+    public bool TryGiveCardsForSeven(List<GameObject> selectedObjects)
     {
-        HorizontalLayoutGroup layout = handArea.GetComponent<HorizontalLayoutGroup>();
-        bool hadLayout = layout != null;
-        if (hadLayout) layout.enabled = false;
+        if (!isWaitingForSevenGive) return false;
 
-        float spacing = hadLayout ? layout.spacing : -30f;
-        float totalW = (cardWidth * spawnedCardObjects.Count) + spacing * (spawnedCardObjects.Count - 1);
-        float startX = -totalW / 2f + cardWidth / 2f;
-
-        for (int i = 0; i < spawnedCardObjects.Count; i++)
+        if (selectedObjects == null || selectedObjects.Count != sevenGiveCount)
         {
-            RectTransform r = spawnedCardObjects[i].GetComponent<RectTransform>();
-            if (r != null)
-                r.anchoredPosition = new Vector2(startX + i * (cardWidth + spacing), 0);
+            Debug.LogWarning($"7渡し {sevenGiveCount} 枚選んでください（今 {selectedObjects?.Count ?? 0} 枚）");
+            return false;
         }
 
-        if (hadLayout) layout.enabled = true;
+        List<Card> myHand = playerHands[0];
+        List<Card> giveCards = new List<Card>();
+
+        foreach (GameObject obj in selectedObjects)
+        {
+            int idx = spawnedCardObjects.IndexOf(obj);
+            if (idx != -1)
+                giveCards.Add(spawnedCardDatas[idx]);
+        }
+
+        if (giveCards.Count != sevenGiveCount)
+        {
+            Debug.LogWarning("7渡しに失敗しました");
+            return false;
+        }
+
+        List<Card> toHand = playerHands[sevenGiveToIndex];
+        foreach (Card c in giveCards)
+        {
+            myHand.Remove(c);
+            toHand.Add(c);
+        }
+
+        foreach (GameObject obj in selectedObjects)
+        {
+            int idx = spawnedCardObjects.IndexOf(obj);
+            if (idx != -1)
+            {
+                spawnedCardObjects.RemoveAt(idx);
+                spawnedCardDatas.RemoveAt(idx);
+                Destroy(obj);
+            }
+        }
+
+        RearrangeRemainingHand();
+
+        string toName = sevenGiveToIndex == 0 ? "あなた" : $"NPC{sevenGiveToIndex + 1}";
+        Debug.Log($"{toName} に {sevenGiveCount}枚渡した");
+        Debug.Log($"{toName} の手札: {validator.FormatCards(toHand)}");
+
+        isWaitingForSevenGive = false;
+        sevenGiveCount = 0;
+        isWaitingForPlayerInput = false;
+
+        if (handController != null)
+            handController.SetupHand(spawnedCardObjects, this);
+
+        NextTurn();
+        return true;
     }
-    private System.Collections.IEnumerator AnimateHandSortAndNextTurn()
+
+    public void PlayCpuCards(int cpuIndex, List<Card> selectedCards)
     {
-        yield return StartCoroutine(AnimateHandSort());
+        if (selectedCards == null || selectedCards.Count == 0)
+        {
+            NextTurn();
+            return;
+        }
+
+        if (!TryValidatePlay(selectedCards, out string playType, out _))
+        {
+            ProcessPass();
+            return;
+        }
+
+        PlaceCardsOnField(selectedCards);
+
+        foreach (Card card in selectedCards)
+            playerHands[cpuIndex].Remove(card);
+
+        bool wasFieldSingleJoker = fieldIsSingleJoker;
+        UpdateFieldState(selectedCards, playType, cpuIndex);
+        bool playAgain = ApplySpecialEffects(selectedCards, playType, cpuIndex, wasFieldSingleJoker);
+
+        if (playAgain)
+            return;
+
         NextTurn();
     }
 
-    public List<Card> GetPlayerHandData(int playerIndex)
+    private void PlaceCardsOnField(List<Card> cards)
     {
-        if (playerIndex >= 0 && playerIndex < playerHands.Count) return playerHands[playerIndex];
-        return null;
-    }
+        ClearAllFieldSlots();
 
-    private void DebugLogHands()
-    {
-        for (int i = 0; i < playerHands.Count; i++)
+        for (int i = 0; i < cards.Count && i < fieldSlots.Length; i++)
         {
-            List<string> cardNames = new List<string>();
-            foreach (Card card in playerHands[i])
+            if (fieldSlots[i] == null) continue;
+
+            GameObject fieldCard = Instantiate(cardPrefab, fieldSlots[i]);
+            RectTransform rt = fieldCard.GetComponent<RectTransform>();
+            if (rt != null)
             {
-                if (card.suit == Card.SuitType.Joker) cardNames.Add("Joker");
-                else cardNames.Add($"{card.suit}({card.number})");
+                rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
+                rt.anchoredPosition = Vector2.zero;
+                rt.sizeDelta = new Vector2(cardWidth, cardHeight);
+                rt.localScale = new Vector3(1f, fieldCardScaleY, 1f);
             }
-            DebugLogHandsEnd(i, cardNames);
+
+            Image img = fieldCard.GetComponentInChildren<Image>();
+            if (img != null)
+            {
+                int spriteIndex = cards[i].id - 1;
+                if (spriteIndex >= 0 && spriteIndex < cardSprites.Length && cardSprites[spriteIndex] != null)
+                    img.sprite = cardSprites[spriteIndex];
+            }
         }
     }
 
-    private void DebugLogHandsEnd(int playerIndex, List<string> cardNames)
+    private void UpdateFieldState(List<Card> cards, string playType, int playerIndex)
     {
-        Debug.Log($"プレイヤー {playerIndex + 1} の手札 ({playerHands[playerIndex].Count}枚): " + string.Join(", ", cardNames));
+        Card.SuitType? playSuit = validator.GetCommonSuit(cards);
+
+        if (currentFieldCardCount > 0 && playSuit.HasValue && lastPlaySuit.HasValue
+            && playSuit.Value == lastPlaySuit.Value)
+        {
+            lockedSuit = playSuit;
+            Debug.Log($"縛り{lockedSuit} のみ出せます");
+        }
+
+        currentFieldCardCount = cards.Count;
+        currentFieldCardStrength = validator.GetPlayStrength(cards);
+        currentFieldPlayType = playType;
+        consecutivePassCount = 0;
+        lastPlayPlayerIndex = playerIndex;
+        lastPlaySuit = playSuit;
+
+        if (playType == "階段")
+        {
+            validator.GetKaidanRange(cards, out currentFieldKaidanMin, out currentFieldKaidanMax);
+            currentFieldCardStrength = currentFieldKaidanMax;
+        }
+        else
+        {
+            currentFieldKaidanMin = 0;
+            currentFieldKaidanMax = 0;
+        }
+
+        fieldIsSingleJoker = (cards.Count == 1 && cards[0].suit == Card.SuitType.Joker);
+
+        string name = playerIndex == 0 ? "あなた" : $"NPC{playerIndex + 1}";
+        string message = $"{name}は{validator.FormatCards(cards)}を出した（{playType}）";
+        AddRoundAction(message);
+
+        if (playerIndex == 0)
+            Debug.Log(message);
+    }
+
+    private bool ApplySpecialEffects(List<Card> cards, string playType, int playerIndex, bool wasFieldSingleJoker = false)
+    {
+        if (wasFieldSingleJoker
+            && cards.Count == 1
+            && cards[0].suit == Card.SuitType.Spade
+            && cards[0].number == 3)
+        {
+            StartCoroutine(DelayedClearFieldAndContinue(playerIndex));
+            return true;
+        }
+
+        if (playType == "4枚" && validator.IsSameNumberGroup(cards))
+        {
+            isRevolution = !isRevolution;
+            Debug.Log($"4枚革命現在: {(isRevolution ? "革命中" : "通常")}");
+        }
+
+        if (playType == "階段" && cards.Count >= 4)
+        {
+            isRevolution = !isRevolution;
+            Debug.Log($"階段革命現在: {(isRevolution ? "革命中" : "通常")}");
+        }
+
+        if (validator.ContainsNumber(cards, 8))
+        {
+            StartCoroutine(DelayedClearFieldAndContinue(playerIndex));
+            return true;
+        }
+
+        int sevenCount = validator.CountSevens(cards);
+        if (sevenCount <= 0) return false;
+
+        int canGive = Mathf.Min(sevenCount, playerHands[playerIndex].Count);
+        if (canGive <= 0) return false;
+
+        int toIndex = (playerIndex + 1) % playerHands.Count;
+
+        if (playerIndex == 0)
+        {
+            isWaitingForSevenGive = true;
+            sevenGiveCount = canGive;
+            sevenGiveToIndex = toIndex;
+            isWaitingForPlayerInput = true;
+            Debug.Log($"7渡し {canGive} 枚選んで Enter");
+            return false;
+        }
+
+        TransferWeakestCards(playerIndex, toIndex, canGive);
+        return false;
+    }
+
+    private System.Collections.IEnumerator DelayedClearFieldAndContinue(int playerIndex)
+    {
+        isClearingField = true;
+        isWaitingForPlayerInput = false;
+
+        yield return new WaitForSeconds(2f);
+
+        ClearFieldAfterSpecial();
+        isClearingField = false;
+
+        if (playerIndex == 0)
+        {
+            activePlayerIndex = 0;
+            isWaitingForPlayerInput = true;
+            if (handController != null)
+                handController.SetupHand(spawnedCardObjects, this);
+            Debug.Log("場が流れた");
+        }
+        else
+        {
+            activePlayerIndex = playerIndex;
+            if (playerIndex >= 0 && playerIndex < playerHands.Count && playerHands[playerIndex].Count > 0)
+            {
+                Debug.Log($"場が流れた。NPC{playerIndex + 1}の番");
+                Invoke(nameof(CallNpcAI), Random.Range(1.0f, 2.0f));
+            }
+            else
+            {
+                NextTurn();
+            }
+        }
+    }
+
+    private void TransferWeakestCards(int fromIndex, int toIndex, int count)
+    {
+        List<Card> fromHand = playerHands[fromIndex];
+        List<Card> toHand = playerHands[toIndex];
+        count = Mathf.Min(count, fromHand.Count);
+        if (count <= 0) return;
+
+        List<Card> sorted = new List<Card>(fromHand);
+        sorted.Sort((a, b) =>
+            validator.GetCardStrengthValue(a).CompareTo(validator.GetCardStrengthValue(b)));
+
+        List<Card> givenCards = new List<Card>();
+        for (int i = 0; i < count; i++)
+        {
+            Card give = sorted[i];
+            fromHand.Remove(give);
+            toHand.Add(give);
+            givenCards.Add(give);
+        }
+
+        string fromName = fromIndex == 0 ? "あなた" : $"NPC{fromIndex + 1}";
+        string toName = toIndex == 0 ? "あなた" : $"NPC{toIndex + 1}";
+        Debug.Log($"7渡し {fromName} が {toName} に {count}枚渡した");
+        Debug.Log($" {toName} の手札: {validator.FormatCards(toHand)}");
+
+        if (toIndex == 0)
+            AddReceivedCardsToPlayerHand(givenCards);
+    }
+
+    private void AddReceivedCardsToPlayerHand(List<Card> receivedCards)
+    {
+        foreach (Card card in receivedCards)
+        {
+            GameObject newCard = Instantiate(cardPrefab, handArea);
+            spawnedCardObjects.Add(newCard);
+            spawnedCardDatas.Add(card);
+
+            Image cardImage = newCard.GetComponentInChildren<Image>();
+            if (cardImage != null)
+            {
+                int spriteIndex = card.id - 1;
+                if (spriteIndex >= 0 && spriteIndex < cardSprites.Length && cardSprites[spriteIndex] != null)
+                    cardImage.sprite = cardSprites[spriteIndex];
+            }
+
+            RectTransform rect = newCard.GetComponent<RectTransform>();
+            if (rect != null)
+            {
+                rect.sizeDelta = new Vector2(cardWidth, cardHeight);
+                if (cardPrefab != null)
+                {
+                    RectTransform prefabRect = cardPrefab.GetComponent<RectTransform>();
+                    if (prefabRect != null)
+                        rect.localScale = prefabRect.localScale;
+                }
+            }
+        }
+
+        SortPlayerHandByStrength();
+    }
+
+    private void SortPlayerHandByStrength()
+    {
+        List<Card> myHand = playerHands[0];
+
+        int pairCount = Mathf.Min(spawnedCardDatas.Count, spawnedCardObjects.Count);
+        List<(Card data, GameObject obj)> pairs = new List<(Card, GameObject)>();
+        for (int i = 0; i < pairCount; i++)
+        {
+            if (spawnedCardObjects[i] == null) continue;
+            pairs.Add((spawnedCardDatas[i], spawnedCardObjects[i]));
+        }
+
+        if (isRevolution)
+            pairs.Sort((a, b) => validator.GetCardStrengthValue(a.data).CompareTo(validator.GetCardStrengthValue(b.data)));
+        else
+            pairs.Sort((a, b) => validator.GetCardStrengthValue(b.data).CompareTo(validator.GetCardStrengthValue(a.data)));
+
+        spawnedCardDatas.Clear();
+        spawnedCardObjects.Clear();
+        myHand.Clear();
+
+        foreach (var p in pairs)
+        {
+            spawnedCardDatas.Add(p.data);
+            spawnedCardObjects.Add(p.obj);
+            myHand.Add(p.data);
+            p.obj.transform.SetParent(handArea, false);
+            p.obj.transform.SetAsLastSibling();
+        }
+
+        RearrangeRemainingHand();
+
+        if (handController != null)
+            handController.SetupHand(spawnedCardObjects, this);
+    }
+
+    private void ClearAllFieldSlots()
+    {
+        foreach (Transform slot in fieldSlots)
+        {
+            if (slot == null) continue;
+            foreach (Transform child in slot)
+                Destroy(child.gameObject);
+        }
+    }
+
+    private void ClearFieldAfterSpecial()
+    {
+        ClearAllFieldSlots();
+        currentFieldCardCount = 0;
+        currentFieldCardStrength = 0;
+        currentFieldPlayType = "";
+        currentFieldKaidanMin = 0;
+        currentFieldKaidanMax = 0;
+        consecutivePassCount = 0;
+        lockedSuit = null;
+        lastPlaySuit = null;
+        fieldIsSingleJoker = false;
+    }
+
+    private void ClearFieldBecauseAllPassed()
+    {
+        string summary = roundActionLog.Count == 0
+            ? "（行動なし）"
+            : string.Join(" / ", roundActionLog);
+
+        Debug.Log($"場が流れた{summary}");
+
+        ClearAllFieldSlots();
+        currentFieldCardCount = 0;
+        currentFieldCardStrength = 0;
+        currentFieldPlayType = "";
+        currentFieldKaidanMin = 0;
+        currentFieldKaidanMax = 0;
+        consecutivePassCount = 0;
+        lastPlayPlayerIndex = -1;
+        lockedSuit = null;
+        lastPlaySuit = null;
+        fieldIsSingleJoker = false;
+        roundActionLog.Clear();
+    }
+
+    private void AddRoundAction(string message)
+    {
+        roundActionLog.Add(message);
     }
 }

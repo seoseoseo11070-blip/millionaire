@@ -1,21 +1,18 @@
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.UI;
 using UnityEngine.InputSystem;
 
 public class PlayerHandController : MonoBehaviour
 {
     [SerializeField] private RectTransform cursorArrow;
 
-    [Tooltip("カードから矢印までの高さ")]
+    [Tooltip("カードの頭上から矢印までの高さ")]
     [SerializeField] private float arrowOffsetY = 0.5f;
 
-    [Tooltip("矢印の位置調整")]
+    [Tooltip("矢印の左右の位置微調整")]
     [SerializeField] private float arrowOffsetX = 0f;
 
-    [Tooltip("矢印の横幅")]
     [SerializeField] private float arrowWidth = 50f;
-    [Tooltip("矢印の縦幅")]
     [SerializeField] private float arrowHeight = 50f;
 
     private List<GameObject> cardObjects = new List<GameObject>();
@@ -30,13 +27,9 @@ public class PlayerHandController : MonoBehaviour
         gameManager = manager;
 
         if (cardObjects != null && cardObjects.Count > 0)
-        {
             currentCursorIndex = cardObjects.Count / 2;
-        }
         else
-        {
             currentCursorIndex = 0;
-        }
 
         selectedIndices.Clear();
         isInputEnabled = true;
@@ -46,14 +39,15 @@ public class PlayerHandController : MonoBehaviour
             cursorArrow.anchorMin = new Vector2(0.5f, 0.5f);
             cursorArrow.anchorMax = new Vector2(0.5f, 0.5f);
             cursorArrow.pivot = new Vector2(0.5f, 0.5f);
-            cursorArrow.gameObject.SetActive(cardObjects.Count > 0);
+            cursorArrow.gameObject.SetActive(cardObjects != null && cardObjects.Count > 0);
         }
+
         UpdateVisuals();
     }
 
     void Update()
     {
-        if (!isInputEnabled || cardObjects.Count == 0) return;
+        if (!isInputEnabled || cardObjects == null || cardObjects.Count == 0) return;
 
         var keyboard = Keyboard.current;
         if (keyboard == null) return;
@@ -74,21 +68,8 @@ public class PlayerHandController : MonoBehaviour
 
         if (keyboard.spaceKey.wasPressedThisFrame)
         {
-            currentCursorIndex = Mathf.Clamp(currentCursorIndex, 0, cardObjects.Count - 1);
-            if (selectedIndices.Contains(currentCursorIndex))
-            {
-                selectedIndices.Remove(currentCursorIndex);
-            }
-            else
-            {
-                if (selectedIndices.Count >= 4)
-                {
-                    selectedIndices.RemoveAt(0);
-                }
-                selectedIndices.Add(currentCursorIndex);
-            }
+            ToggleSelection(currentCursorIndex);
             UpdateVisuals();
-            LogSelectedCards();
         }
 
         if (keyboard.enterKey.wasPressedThisFrame || keyboard.numpadEnterKey.wasPressedThisFrame)
@@ -97,30 +78,66 @@ public class PlayerHandController : MonoBehaviour
         }
     }
 
-    private void LogSelectedCards()
+    private void ToggleSelection(int index)
     {
-        if (gameManager == null) return;
+        index = Mathf.Clamp(index, 0, cardObjects.Count - 1);
 
-        List<string> cardNames = new List<string>();
-        List<Card> myHand = gameManager.GetPlayerHandData(0);
-
-        foreach (int index in selectedIndices)
+        if (selectedIndices.Contains(index))
         {
-            if (myHand != null && index >= 0 && index < myHand.Count)
-            {
-                Card card = myHand[index];
-                if (card.suit == Card.SuitType.Joker) cardNames.Add("Joker");
-                else cardNames.Add($"{card.suit}({card.number})");
-            }
+            selectedIndices.Remove(index);
+            return;
         }
 
-        if (cardNames.Count > 0) Debug.Log($"【現在選択中のカード一覧（計 {cardNames.Count} 枚）】: " + string.Join(" → ", cardNames));
-        else Debug.Log("【現在選択中のカード一覧】: なし");
+        int maxSelect = 4;
+        if (gameManager != null && gameManager.IsWaitingForSevenGive())
+            maxSelect = gameManager.GetSevenGiveCount();
+
+        if (selectedIndices.Count >= maxSelect)
+            selectedIndices.RemoveAt(0);
+
+        selectedIndices.Add(index);
     }
 
     private void TryPlayOrPassSelectedCards()
     {
         if (gameManager == null) return;
+
+        if (gameManager.IsWaitingForSevenGive())
+        {
+            List<GameObject> giveObjects = new List<GameObject>();
+            foreach (int index in selectedIndices)
+            {
+                if (index >= 0 && index < cardObjects.Count)
+                    giveObjects.Add(cardObjects[index]);
+            }
+
+            bool ok = gameManager.TryGiveCardsForSeven(giveObjects);
+            if (ok)
+            {
+                foreach (GameObject obj in giveObjects)
+                    cardObjects.Remove(obj);
+
+                selectedIndices.Clear();
+
+                if (cardObjects.Count > 0)
+                    currentCursorIndex = cardObjects.Count / 2;
+                else
+                {
+                    currentCursorIndex = 0;
+                    if (cursorArrow != null) cursorArrow.gameObject.SetActive(false);
+                }
+
+                if (cursorArrow != null) cursorArrow.gameObject.SetActive(false);
+                UpdateVisuals();
+                if (cardObjects.Count > 0)
+                    Invoke(nameof(ShowCursorAfterMove), 0.05f);
+            }
+            else
+            {
+                UpdateVisuals();
+            }
+            return;
+        }
 
         if (!gameManager.IsMyTurn())
         {
@@ -143,46 +160,42 @@ public class PlayerHandController : MonoBehaviour
 
         List<GameObject> selectedObjects = new List<GameObject>();
         foreach (int index in selectedIndices)
-        {
-            if (index < cardObjects.Count)
-                selectedObjects.Add(cardObjects[index]);
-        }
+            selectedObjects.Add(cardObjects[index]);
 
         bool canPlay = gameManager.CheckAndPlaySelectedObjects(selectedObjects);
 
         if (canPlay)
         {
             foreach (GameObject obj in selectedObjects)
-            {
                 cardObjects.Remove(obj);
-            }
+
             selectedIndices.Clear();
+
+            if (gameManager.IsWaitingForSevenGive())
+            {
+                if (cardObjects.Count > 0)
+                    currentCursorIndex = cardObjects.Count / 2;
+                UpdateVisuals();
+                return;
+            }
+
             if (cardObjects.Count > 0)
             {
                 currentCursorIndex = cardObjects.Count / 2;
-
-                if (cursorArrow != null)
-                {
-                    cursorArrow.gameObject.SetActive(false);
-                }
+                if (cursorArrow != null) cursorArrow.gameObject.SetActive(false);
+                UpdateVisuals();
+                Invoke(nameof(ShowCursorAfterMove), 0.05f);
             }
             else
             {
                 currentCursorIndex = 0;
-                if (cursorArrow != null)
-                    cursorArrow.gameObject.SetActive(false);
+                if (cursorArrow != null) cursorArrow.gameObject.SetActive(false);
             }
-
-            UpdateVisuals();
-            Invoke(nameof(ShowCursorAfterMove), 0.05f);
-        }
-        else
-        {
-            Debug.LogWarning("そのカードの組み合わせは場に出せません");
         }
 
         UpdateVisuals();
     }
+
     private void ShowCursorAfterMove()
     {
         if (cursorArrow != null && cardObjects.Count > 0)
@@ -194,25 +207,21 @@ public class PlayerHandController : MonoBehaviour
 
     private void UpdateVisuals()
     {
+        if (cardObjects == null) return;
+
         if (cardObjects.Count > 0)
         {
             if (currentCursorIndex < 0 || currentCursorIndex >= cardObjects.Count)
-            {
                 currentCursorIndex = cardObjects.Count / 2;
-            }
         }
         else
         {
             currentCursorIndex = 0;
             if (cursorArrow != null) cursorArrow.gameObject.SetActive(false);
+            return;
         }
 
         selectedIndices.RemoveAll(index => index < 0 || index >= cardObjects.Count);
-
-        if (cardObjects.Count > 0 && currentCursorIndex >= cardObjects.Count)
-        {
-            currentCursorIndex = cardObjects.Count - 1;
-        }
 
         for (int i = 0; i < cardObjects.Count; i++)
         {
@@ -220,34 +229,31 @@ public class PlayerHandController : MonoBehaviour
             if (cardObj == null) continue;
 
             RectTransform rect = cardObj.GetComponent<RectTransform>();
-            if (rect != null)
+            if (rect == null) continue;
+
+            float targetY = selectedIndices.Contains(i) ? 0.5f : 0f;
+            rect.localPosition = new Vector3(rect.localPosition.x, targetY, rect.localPosition.z);
+
+            if (i == currentCursorIndex && cursorArrow != null)
             {
-                float targetY = selectedIndices.Contains(i) ? 0.5f : 0f;
-                rect.localPosition = new Vector3(rect.localPosition.x, targetY, rect.localPosition.z);
+                if (!cursorArrow.gameObject.activeSelf)
+                    cursorArrow.gameObject.SetActive(true);
 
-                if (i == currentCursorIndex && cursorArrow != null)
-                {
-                    if (!cursorArrow.gameObject.activeSelf) cursorArrow.gameObject.SetActive(true);
+                Vector3 cardWorldPos = rect.position;
+                float halfHeightWorld = rect.rect.height * 0.5f * rect.lossyScale.y;
 
-                    Vector3 cardWorldPos = rect.position;
-                    float halfHeightWorld = rect.rect.height * 0.5f * rect.lossyScale.y;
+                cursorArrow.position = new Vector3(
+                    cardWorldPos.x + arrowOffsetX,
+                    cardWorldPos.y + halfHeightWorld + arrowOffsetY,
+                    cursorArrow.position.z
+                );
 
-                    cursorArrow.position = new Vector3(
-                        cardWorldPos.x + arrowOffsetX,
-                        cardWorldPos.y + halfHeightWorld + arrowOffsetY,
-                        cursorArrow.position.z
-                    );
-
-                    cursorArrow.localScale = Vector3.one;
-                    cursorArrow.sizeDelta = new Vector2(arrowWidth, arrowHeight);
-                }
+                cursorArrow.localScale = Vector3.one;
+                cursorArrow.sizeDelta = new Vector2(arrowWidth, arrowHeight);
             }
         }
 
         if (cursorArrow != null)
-        {
             cursorArrow.SetAsLastSibling();
-        }
     }
 }
-
