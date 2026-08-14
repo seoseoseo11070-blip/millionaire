@@ -46,27 +46,29 @@ public class NPCController : MonoBehaviour
 
         List<List<Card>> candidates = new List<List<Card>>();
 
-        if (required == 0 || required == 1)
+        bool allowSingle = required == 0
+            || required == 1
+            || fieldType == "1枚"
+            || string.IsNullOrEmpty(fieldType);
+
+        if (allowSingle && (required == 0 || required == 1))
         {
-            if (required == 0 || string.IsNullOrEmpty(fieldType) || fieldType == "単体")
-            {
-                foreach (Card c in hand)
-                    candidates.Add(new List<Card> { c });
-            }
+            foreach (Card c in hand)
+                candidates.Add(new List<Card> { c });
         }
 
         bool allowSameNumber = required == 0
-            || string.IsNullOrEmpty(fieldType)
-            || fieldType == "ペア"
+            || fieldType == "2枚"
             || fieldType == "3枚"
-            || fieldType == "4枚";
+            || fieldType == "4枚"
+            || string.IsNullOrEmpty(fieldType);
 
         if (allowSameNumber && (required == 0 || required >= 2))
             AddSameNumberCandidates(hand, required, candidates);
 
         bool allowKaidan = required == 0
-            || string.IsNullOrEmpty(fieldType)
-            || fieldType == "階段";
+            || fieldType == "階段"
+            || string.IsNullOrEmpty(fieldType);
 
         if (allowKaidan && (required == 0 || required >= 3))
             AddKaidanCandidates(hand, required, candidates);

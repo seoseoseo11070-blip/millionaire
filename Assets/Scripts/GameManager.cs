@@ -9,6 +9,9 @@ public class GameManager : MonoBehaviour
     [SerializeField] private Sprite[] cardSprites;
     [SerializeField] private PlayerHandController handController;
 
+    [Header("NPC演出")]
+    [SerializeField] private NPCThinkingEffect thinkingEffect;
+
     [Header("NPC")]
     [SerializeField] private NPCController npcController;
 
@@ -316,6 +319,10 @@ public class GameManager : MonoBehaviour
     {
         if (isClearingField) return;
 
+        if (thinkingEffect != null)
+            thinkingEffect.SetThinkingPlayer(activePlayerIndex);
+        else
+            Debug.LogWarning("thinkingEffect が null です");
         if (activePlayerIndex == 0)
         {
             isWaitingForPlayerInput = true;
@@ -643,6 +650,11 @@ public class GameManager : MonoBehaviour
 
         ClearFieldAfterSpecial();
         isClearingField = false;
+
+        if (thinkingEffect != null)
+        {
+            thinkingEffect.HideAll();
+        }
 
         if (playerIndex == 0)
         {

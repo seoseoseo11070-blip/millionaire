@@ -9,13 +9,13 @@ public class PlayValidator
 
         if (n == 1)
         {
-            playType = "単体";
+            playType = "1枚";
             return true;
         }
 
         if (IsSameNumberGroup(cards))
         {
-            if (n == 2) { playType = "ペア"; return true; }
+            if (n == 2) { playType = "2枚"; return true; }
             if (n == 3) { playType = "3枚"; return true; }
             if (n == 4) { playType = "4枚"; return true; }
             return false;
