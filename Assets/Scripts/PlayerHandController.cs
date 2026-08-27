@@ -26,11 +26,6 @@ public class PlayerHandController : MonoBehaviour
         cardObjects = spawnedCards;
         gameManager = manager;
 
-        if (cardObjects != null && cardObjects.Count > 0)
-            currentCursorIndex = cardObjects.Count / 2;
-        else
-            currentCursorIndex = 0;
-
         selectedIndices.Clear();
         isInputEnabled = true;
 
@@ -39,10 +34,20 @@ public class PlayerHandController : MonoBehaviour
             cursorArrow.anchorMin = new Vector2(0.5f, 0.5f);
             cursorArrow.anchorMax = new Vector2(0.5f, 0.5f);
             cursorArrow.pivot = new Vector2(0.5f, 0.5f);
-            cursorArrow.gameObject.SetActive(cardObjects != null && cardObjects.Count > 0);
+            cursorArrow.gameObject.SetActive(false);
         }
 
-        UpdateVisuals();
+        if (cardObjects != null && cardObjects.Count > 0)
+        {
+            currentCursorIndex = cardObjects.Count / 2;
+            FocusArrowOnHandCenter();
+        }
+        else
+        {
+            currentCursorIndex = 0;
+            if (cursorArrow != null)
+                cursorArrow.gameObject.SetActive(false);
+        }
     }
 
     void Update()
@@ -173,36 +178,21 @@ public class PlayerHandController : MonoBehaviour
 
             if (gameManager.IsWaitingForSevenGive())
             {
-                if (cardObjects.Count > 0)
-                    currentCursorIndex = cardObjects.Count / 2;
-                UpdateVisuals();
+                FocusArrowOnHandCenter();
                 return;
             }
 
             if (cardObjects.Count > 0)
-            {
-                currentCursorIndex = cardObjects.Count / 2;
-                if (cursorArrow != null) cursorArrow.gameObject.SetActive(false);
-                UpdateVisuals();
-                Invoke(nameof(ShowCursorAfterMove), 0.05f);
-            }
+                FocusArrowOnHandCenter();
             else
             {
                 currentCursorIndex = 0;
-                if (cursorArrow != null) cursorArrow.gameObject.SetActive(false);
+                if (cursorArrow != null)
+                    cursorArrow.gameObject.SetActive(false);
             }
         }
 
         UpdateVisuals();
-    }
-
-    private void ShowCursorAfterMove()
-    {
-        if (cursorArrow != null && cardObjects.Count > 0)
-        {
-            cursorArrow.gameObject.SetActive(true);
-            UpdateVisuals();
-        }
     }
 
     private void UpdateVisuals()
@@ -236,8 +226,7 @@ public class PlayerHandController : MonoBehaviour
 
             if (i == currentCursorIndex && cursorArrow != null)
             {
-                if (!cursorArrow.gameObject.activeSelf)
-                    cursorArrow.gameObject.SetActive(true);
+                cursorArrow.gameObject.SetActive(true);
 
                 Vector3 cardWorldPos = rect.position;
                 float halfHeightWorld = rect.rect.height * 0.5f * rect.lossyScale.y;
@@ -255,5 +244,64 @@ public class PlayerHandController : MonoBehaviour
 
         if (cursorArrow != null)
             cursorArrow.SetAsLastSibling();
+    }
+    public void FocusArrowOnHandCenter()
+    {
+        selectedIndices.Clear();
+
+        if (cardObjects == null || cardObjects.Count == 0)
+        {
+            currentCursorIndex = 0;
+            if (cursorArrow != null)
+                cursorArrow.gameObject.SetActive(false);
+            return;
+        }
+
+        currentCursorIndex = Mathf.Clamp(cardObjects.Count / 2, 0, cardObjects.Count - 1);
+
+        if (cursorArrow != null)
+            cursorArrow.gameObject.SetActive(false);
+
+        UpdateCursorPositionOnly();
+
+
+        CancelInvoke(nameof(ShowCursorAfterMove));
+        Invoke(nameof(ShowCursorAfterMove), 0.05f);
+    }
+
+    private void UpdateCursorPositionOnly()
+    {
+        if (cursorArrow == null || cardObjects == null || cardObjects.Count == 0)
+            return;
+
+        currentCursorIndex = Mathf.Clamp(currentCursorIndex, 0, cardObjects.Count - 1);
+
+        GameObject cardObj = cardObjects[currentCursorIndex];
+        if (cardObj == null) return;
+
+        RectTransform rect = cardObj.GetComponent<RectTransform>();
+        if (rect == null) return;
+
+        Vector3 cardWorldPos = rect.position;
+        float halfHeightWorld = rect.rect.height * 0.5f * rect.lossyScale.y;
+
+        cursorArrow.position = new Vector3(
+            cardWorldPos.x + arrowOffsetX,
+            cardWorldPos.y + halfHeightWorld + arrowOffsetY,
+            cursorArrow.position.z
+        );
+        cursorArrow.localScale = Vector3.one;
+        cursorArrow.sizeDelta = new Vector2(arrowWidth, arrowHeight);
+    }
+
+    private void ShowCursorAfterMove()
+    {
+        if (cursorArrow == null || cardObjects == null || cardObjects.Count == 0)
+            return;
+
+        UpdateCursorPositionOnly();
+        cursorArrow.gameObject.SetActive(true);
+        cursorArrow.SetAsLastSibling();
+        UpdateVisuals();
     }
 }

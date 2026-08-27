@@ -634,9 +634,11 @@ public class GameManager : MonoBehaviour
             sevenGiveToIndex = toIndex;
             isWaitingForPlayerInput = true;
             Debug.Log($"7渡し {canGive} 枚選んで Enter");
+            if (handController != null)
+                handController.FocusArrowOnHandCenter();
+
             return false;
         }
-
         TransferWeakestCards(playerIndex, toIndex, canGive);
         return false;
     }
@@ -738,6 +740,12 @@ public class GameManager : MonoBehaviour
         }
 
         SortPlayerHandByStrength();
+        RearrangeRemainingHand();
+
+        if (handController != null)
+        {
+            handController.SetupHand(spawnedCardObjects, this);
+        }
     }
 
     private void SortPlayerHandByStrength()
