@@ -130,7 +130,6 @@ GameObject:
   - component: {fileID: 379409669}
   - component: {fileID: 379409671}
   - component: {fileID: 379409670}
-  - component: {fileID: 379409672}
   m_Layer: 0
   m_Name: arrow
   m_TagString: Untagged
@@ -195,28 +194,6 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 379409668}
   m_CullTransparentMesh: 1
---- !u!114 &379409672
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 379409668}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: bf0dc6640a1c04c41a6a479459091e16, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::TitleDifficultySelector
-  panelRoot: {fileID: 379409669}
-  barImage: {fileID: 379409670}
-  spriteWeak: {fileID: 21300000, guid: 01c66f4d193f21948a32473a12abbf6a, type: 3}
-  spriteNormal: {fileID: 21300000, guid: dff25461b8859af468252ce2ce82e6c2, type: 3}
-  spriteStrong: {fileID: 21300000, guid: 829ae225d2b98394bafc46f942c31218, type: 3}
-  hiddenX: 900
-  shownX: 0
-  slideSpeed: 12
-  requireHover: 1
-  startButton: {fileID: 0}
 --- !u!1 &410087039
 GameObject:
   m_ObjectHideFlags: 0
