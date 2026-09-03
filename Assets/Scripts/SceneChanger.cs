@@ -11,6 +11,6 @@ public class SceneChanger : MonoBehaviour
             return;
         }
 
-        SceneManager.LoadScene(0);
+        SceneManager.LoadScene("GameScene");
     }
 }
