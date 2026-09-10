@@ -14,7 +14,7 @@ public class NPCThinkingEffect : MonoBehaviour
         public Sprite[] frames = new Sprite[3];
     }
 
-    [Header("NPC")]
+    [Header("npc")]
     [SerializeField] private NpcThinkSlot[] npcSlots = new NpcThinkSlot[3];
 
     [Header("切り替え,秒")]

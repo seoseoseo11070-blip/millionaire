@@ -104,6 +104,7 @@ public class TitleDifficultySelector : MonoBehaviour, IPointerEnterHandler, IPoi
     private void ApplyVisual()
     {
         if (barImage == null) return;
+
         barImage.sprite = difficulty switch
         {
             NpcDifficulty.Strong => spriteStrong,
