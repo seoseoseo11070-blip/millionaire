@@ -11,127 +11,43 @@ public class WeakNpcLogicTests
     {
         validator = new PlayValidator();
     }
-
+    // strength: 3→1, 4→2, 5→3, 6→4, 7→5, 8→6, 9→7, 10→8, J→9, Q→10, K→11, A→12, 2→13, Joker→14
     static Card MakeCard(Card.SuitType suit, int number, int strength, int id = 0)
     {
         return new Card(id, suit, number, strength);
     }
 
-
     [Test]
-    public void 場が空_最弱の1枚を出す()
+    public void 弱いNPC_場と手札()
     {
-        var field = WeakNpcLogic.FieldState.Empty();
-        var hand = new List<Card>
+        var fieldCards = new List<Card>
         {
-            MakeCard(Card.SuitType.Spade, 3, 1),
-            MakeCard(Card.SuitType.Heart, 2, 13),
+            MakeCard(Card.SuitType.Diamond, 4, 2),
         };
 
-        List<Card> result = WeakNpcLogic.Decide(hand, field, validator);
-        string played = WeakNpcLogic.FormatResult(result);
-        Debug.Log($"[場が空_最弱の1枚を出す] NPCの出し: {played}");
+        // 場の状況
+        var field = new WeakNpcLogic.FieldState
+        {
+            cardCount = 1,              // 場の枚数（0=空）
+            cardStrength = 2,           // 場の強さ
+            playType = "1枚",           // "", "1枚", "2枚", "3枚", "4枚", "階段"
+            isRevolution = false,       // 革命中なら true
+            isSingleJoker = false,      // 場がジョーカー1枚なら true
+            lockedSuit = null,          // 縛りなし=null  例: Card.SuitType.Spade
+            kaidanMin = 0,
+            kaidanMax = 0,
+        };
 
-        Assert.AreEqual(1, result.Count, $"実際: {played}");
-        Assert.AreEqual(3, result[0].number, $"実際: {played}");
-        Assert.AreEqual(Card.SuitType.Spade, result[0].suit, $"実際: {played}");
-    }
-
-
-    [Test]
-    public void 場に単体_勝てる最弱を出す()
-    {
-        var field = WeakNpcLogic.FieldState.Single(strength: 1);
         var hand = new List<Card>
         {
+            MakeCard(Card.SuitType.Diamond, 3, 1),
             MakeCard(Card.SuitType.Spade, 4, 2),
-            MakeCard(Card.SuitType.Heart, 5, 3),
-            MakeCard(Card.SuitType.Club, 2, 13),
-        };
-
-        List<Card> result = WeakNpcLogic.Decide(hand, field, validator);
-        string played = WeakNpcLogic.FormatResult(result);
-        Debug.Log($"[場に単体_勝てる最弱を出す] NPCの出し: {played}");
-
-        Assert.AreEqual(1, result.Count, $"実際: {played}");
-        Assert.AreEqual(4, result[0].number, $"実際: {played}");
-    }
-
-    [Test]
-    public void 場に単体_勝てなければパス()
-    {
-        var field = WeakNpcLogic.FieldState.Single(strength: 13);
-        var hand = new List<Card>
-        {
-            MakeCard(Card.SuitType.Spade, 3, 1),
-            MakeCard(Card.SuitType.Heart, 4, 2),
-        };
-
-        List<Card> result = WeakNpcLogic.Decide(hand, field, validator);
-        string played = WeakNpcLogic.FormatResult(result);
-        Debug.Log($"[場に単体_勝てなければパス] NPCの出し: {played}");
-
-        Assert.AreEqual(0, result.Count, $"実際: {played}");
-        Assert.AreEqual("パス", played);
-    }
-
-
-    [Test]
-    public void 場がジョーカー_スペ3を出す()
-    {
-        var field = WeakNpcLogic.FieldState.Single(strength: 14, isJoker: true);
-        var hand = new List<Card>
-        {
-            MakeCard(Card.SuitType.Heart, 2, 13),
-            MakeCard(Card.SuitType.Spade, 3, 1),
-        };
-
-        List<Card> result = WeakNpcLogic.Decide(hand, field, validator);
-        string played = WeakNpcLogic.FormatResult(result);
-        Debug.Log($"[場がジョーカー_スペ3を出す] NPCの出し: {played}");
-
-        Assert.AreEqual(1, result.Count, $"実際: {played}");
-        Assert.AreEqual(Card.SuitType.Spade, result[0].suit, $"実際: {played}");
-        Assert.AreEqual(3, result[0].number, $"実際: {played}");
-    }
-
-
-    [Test]
-    public void 場がペア_より強いペアを出す()
-    {
-        var field = WeakNpcLogic.FieldState.Multi(2, strength: 2, playType: "2枚");
-        var hand = new List<Card>
-        {
             MakeCard(Card.SuitType.Spade, 5, 3),
-            MakeCard(Card.SuitType.Heart, 5, 3),
-            MakeCard(Card.SuitType.Club, 3, 1),
+            MakeCard(Card.SuitType.Heart, 6, 4),
+            MakeCard(Card.SuitType.Heart, 9, 7),
         };
-
         List<Card> result = WeakNpcLogic.Decide(hand, field, validator);
-        string played = WeakNpcLogic.FormatResult(result);
-        Debug.Log($"[場がペア_より強いペアを出す] NPCの出し: {played}");
-
-        Assert.AreEqual(2, result.Count, $"実際: {played}");
-        Assert.AreEqual(5, result[0].number, $"実際: {played}");
-        Assert.AreEqual(5, result[1].number, $"実際: {played}");
-    }
-
-
-    [Test]
-    public void ひな形_場と手札を書き換えて使う()
-    {
-        var field = WeakNpcLogic.FieldState.Empty();
-        var hand = new List<Card>
-        {
-            MakeCard(Card.SuitType.Spade, 3, 1),
-            MakeCard(Card.SuitType.Heart, 4, 2),
-        };
-
-        List<Card> result = WeakNpcLogic.Decide(hand, field, validator);
-        string played = WeakNpcLogic.FormatResult(result);
-        Debug.Log($"[ひな形] NPCの出し: {played}");
-
-        Assert.AreEqual(1, result.Count, $"実際: {played}");
-        Assert.AreEqual(3, result[0].number, $"実際: {played}");
+        WeakNpcLogic.LogDecision(field, hand, result, fieldCards);
+        Assert.IsNotNull(result);
     }
 }

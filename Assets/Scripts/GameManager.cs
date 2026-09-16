@@ -15,6 +15,9 @@ public class GameManager : MonoBehaviour
     [Header("NPC")]
     [SerializeField] private NPCController npcController;
 
+    [Header("対戦情報")]
+    [SerializeField] private BattleInfoPanel battleInfoPanel;
+
     [Header("場スロット")]
     [SerializeField] private Transform[] fieldSlots;
 
@@ -57,7 +60,6 @@ public class GameManager : MonoBehaviour
 
     private bool[] hasFinished;
 
-    // ===== 公開API =====
     public int GetCurrentFieldCardCount() => currentFieldCardCount;
     public int GetCurrentFieldCardStrength() => currentFieldCardStrength;
     public bool IsRevolution() => isRevolution;
@@ -73,6 +75,12 @@ public class GameManager : MonoBehaviour
     public IReadOnlyList<Card> GetPlayedHistory() => playedHistory;
     public int GetPlayerCount() => playerHands.Count;
 
+
+    private void RefreshBattleInfoUI()
+    {
+        if (battleInfoPanel == null) return;
+        battleInfoPanel.Refresh(isRevolution, lockedSuit);
+    }
     public int GetHandCount(int playerIndex)
     {
         if (playerIndex < 0 || playerIndex >= playerHands.Count) return 0;
@@ -159,6 +167,7 @@ public class GameManager : MonoBehaviour
 
         DistributeCards(playerCount);
         DisplayMyHand();
+        RefreshBattleInfoUI();
     }
 
     private string PlayerName(int index)
@@ -211,6 +220,7 @@ public class GameManager : MonoBehaviour
         for (int i = 1; i < playerCount; i++)
             playerHands[i].Sort((a, b) => b.strength.CompareTo(a.strength));
     }
+
     private void DisplayMyHand()
     {
         foreach (Transform child in handArea)
@@ -544,7 +554,6 @@ public class GameManager : MonoBehaviour
         }
 
         RearrangeRemainingHand();
-
         Debug.Log($"{PlayerName(sevenGiveToIndex)} に {sevenGiveCount}枚渡した");
 
         isWaitingForSevenGive = false;
@@ -659,6 +668,8 @@ public class GameManager : MonoBehaviour
 
         foreach (Card c in cards)
             playedHistory.Add(c);
+
+        RefreshBattleInfoUI();
     }
 
     private bool ApplySpecialEffects(List<Card> cards, string playType, int playerIndex, bool wasFieldSingleJoker)
@@ -676,12 +687,14 @@ public class GameManager : MonoBehaviour
         {
             isRevolution = !isRevolution;
             Debug.Log($"4枚革命 現在: {(isRevolution ? "革命中" : "通常")}");
+            RefreshBattleInfoUI();
         }
 
         if (playType == "階段" && cards.Count >= 4)
         {
             isRevolution = !isRevolution;
             Debug.Log($"階段革命 現在: {(isRevolution ? "革命中" : "通常")}");
+            RefreshBattleInfoUI();
         }
 
         if (validator.ContainsNumber(cards, 8))
@@ -880,6 +893,7 @@ public class GameManager : MonoBehaviour
         lockedSuit = null;
         lastPlaySuit = null;
         fieldIsSingleJoker = false;
+        RefreshBattleInfoUI();
     }
 
     private void ClearFieldBecauseAllPassed()
