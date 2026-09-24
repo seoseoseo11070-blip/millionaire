@@ -12,20 +12,20 @@ public class GameManager : MonoBehaviour
     [Header("NPC演出")]
     [SerializeField] private NPCThinkingEffect thinkingEffect;
 
+    [Header("対戦情報UI")]
+    [SerializeField] private BattleInfoPanel battleInfoPanel;
+
     [Header("NPC")]
     [SerializeField] private NPCController npcController;
 
-    [Header("対戦情報")]
-    [SerializeField] private BattleInfoPanel battleInfoPanel;
-
-    [Header("場スロット")]
+    [Header("場")]
     [SerializeField] private Transform[] fieldSlots;
 
     [Header("カードサイズ")]
     [SerializeField] private float cardWidth = 100f;
     [SerializeField] private float cardHeight = 140f;
 
-    [Header("場のカードの縦潰し")]
+    [Header("場のカード")]
     [Range(0.1f, 1.0f)]
     [SerializeField] private float fieldCardScaleY = 0.7f;
 
@@ -37,6 +37,9 @@ public class GameManager : MonoBehaviour
     private List<GameObject> spawnedCardObjects = new List<GameObject>();
     private List<Card> spawnedCardDatas = new List<Card>();
     private List<Card> playedHistory = new List<Card>();
+    private List<Card> currentFieldCards = new List<Card>();
+
+    private HashSet<Card.SuitType> lockedSuits = new HashSet<Card.SuitType>();
 
     private int consecutivePassCount;
     private int lastPlayPlayerIndex = -1;
@@ -44,7 +47,6 @@ public class GameManager : MonoBehaviour
     private int currentFieldCardStrength;
     private bool isRevolution;
 
-    private Card.SuitType? lockedSuit;
     private Card.SuitType? lastPlaySuit;
     private string currentFieldPlayType = "";
     private bool fieldIsSingleJoker;
@@ -60,6 +62,7 @@ public class GameManager : MonoBehaviour
 
     private bool[] hasFinished;
 
+    // ===== 公開API =====
     public int GetCurrentFieldCardCount() => currentFieldCardCount;
     public int GetCurrentFieldCardStrength() => currentFieldCardStrength;
     public bool IsRevolution() => isRevolution;
@@ -69,18 +72,31 @@ public class GameManager : MonoBehaviour
     public string GetCurrentFieldPlayType() => currentFieldPlayType;
     public int GetCurrentFieldKaidanMin() => currentFieldKaidanMin;
     public int GetCurrentFieldKaidanMax() => currentFieldKaidanMax;
-    public bool IsSuitLocked() => lockedSuit.HasValue;
-    public Card.SuitType? GetLockedSuit() => lockedSuit;
     public Card.SuitType? GetLastPlaySuit() => lastPlaySuit;
     public IReadOnlyList<Card> GetPlayedHistory() => playedHistory;
     public int GetPlayerCount() => playerHands.Count;
 
+    public bool IsSuitLocked() => lockedSuits != null && lockedSuits.Count > 0;
 
-    private void RefreshBattleInfoUI()
+    public bool IsSuitAllowed(Card.SuitType suit)
     {
-        if (battleInfoPanel == null) return;
-        battleInfoPanel.Refresh(isRevolution, lockedSuit);
+        if (lockedSuits == null || lockedSuits.Count == 0) return true;
+        if (suit == Card.SuitType.Joker) return true;
+        return lockedSuits.Contains(suit);
     }
+
+    public Card.SuitType? GetLockedSuit()
+    {
+        if (lockedSuits == null || lockedSuits.Count == 0) return null;
+        foreach (var s in lockedSuits) return s;
+        return null;
+    }
+
+    public List<Card> GetCurrentFieldCards()
+    {
+        return new List<Card>(currentFieldCards);
+    }
+
     public int GetHandCount(int playerIndex)
     {
         if (playerIndex < 0 || playerIndex >= playerHands.Count) return 0;
@@ -111,18 +127,37 @@ public class GameManager : MonoBehaviour
 
     public bool TryValidatePlay(List<Card> cards, out string playType, out string error)
     {
-        return validator.TryValidate(
+        if (!validator.TryValidate(
             cards,
             currentFieldCardCount,
             currentFieldCardStrength,
             currentFieldPlayType,
             isRevolution,
             fieldIsSingleJoker,
-            lockedSuit,
+            GetLockedSuit(),
             currentFieldKaidanMin,
             currentFieldKaidanMax,
             out playType,
-            out error);
+            out error))
+        {
+            return false;
+        }
+
+        if (IsSuitLocked())
+        {
+            foreach (Card c in cards)
+            {
+                if (c.suit == Card.SuitType.Joker) continue;
+                if (!IsSuitAllowed(c.suit))
+                {
+                    error = "縛り";
+                    playType = "";
+                    return false;
+                }
+            }
+        }
+
+        return true;
     }
 
     void Start()
@@ -138,6 +173,8 @@ public class GameManager : MonoBehaviour
         lastPlayPlayerIndex = -1;
         spawnedCardObjects.Clear();
         spawnedCardDatas.Clear();
+        currentFieldCards.Clear();
+        lockedSuits.Clear();
 
         currentFieldCardCount = 0;
         currentFieldCardStrength = 0;
@@ -145,7 +182,6 @@ public class GameManager : MonoBehaviour
         currentFieldKaidanMin = 0;
         currentFieldKaidanMax = 0;
         isRevolution = false;
-        lockedSuit = null;
         lastPlaySuit = null;
         fieldIsSingleJoker = false;
 
@@ -632,21 +668,42 @@ public class GameManager : MonoBehaviour
 
     private void UpdateFieldState(List<Card> cards, string playType, int playerIndex)
     {
-        Card.SuitType? playSuit = validator.GetCommonSuit(cards);
-
-        if (currentFieldCardCount > 0 && playSuit.HasValue && lastPlaySuit.HasValue
-            && playSuit.Value == lastPlaySuit.Value)
+        List<Card> previousField = new List<Card>(currentFieldCards);
+        if (previousField.Count > 0)
         {
-            lockedSuit = playSuit;
-            Debug.Log($"縛り {lockedSuit} のみ出せます");
+            if (previousField.Count == 2 && cards.Count == 2)
+            {
+                if (SameSuitSet(previousField, cards))
+                {
+                    lockedSuits.Clear();
+                    foreach (Card c in cards)
+                    {
+                        if (c.suit != Card.SuitType.Joker)
+                            lockedSuits.Add(c.suit);
+                    }
+                    Debug.Log($"2枚縛り: {string.Join(",", lockedSuits)}");
+                }
+            }
+            else if (previousField.Count == 1 && cards.Count == 1)
+            {
+                if (previousField[0].suit != Card.SuitType.Joker
+                    && cards[0].suit != Card.SuitType.Joker
+                    && previousField[0].suit == cards[0].suit)
+                {
+                    lockedSuits.Clear();
+                    lockedSuits.Add(cards[0].suit);
+                    Debug.Log($"1枚縛り: {cards[0].suit}");
+                }
+            }
         }
 
+        currentFieldCards = new List<Card>(cards);
         currentFieldCardCount = cards.Count;
         currentFieldCardStrength = validator.GetPlayStrength(cards);
         currentFieldPlayType = playType;
         consecutivePassCount = 0;
         lastPlayPlayerIndex = playerIndex;
-        lastPlaySuit = playSuit;
+        lastPlaySuit = validator.GetCommonSuit(cards);
 
         if (playType == "階段")
         {
@@ -661,7 +718,7 @@ public class GameManager : MonoBehaviour
 
         fieldIsSingleJoker = cards.Count == 1 && cards[0].suit == Card.SuitType.Joker;
 
-        string message = $"{PlayerName(playerIndex)}は{validator.FormatCards(cards)}を出した（{playType}）";
+        string message = $"{PlayerName(playerIndex)}は{validator.FormatCards(cards)}を出した（{playType}";
         AddRoundAction(message);
         if (playerIndex == 0)
             Debug.Log(message);
@@ -670,6 +727,29 @@ public class GameManager : MonoBehaviour
             playedHistory.Add(c);
 
         RefreshBattleInfoUI();
+    }
+
+    private bool SameSuitSet(List<Card> a, List<Card> b)
+    {
+        if (a == null || b == null || a.Count != 2 || b.Count != 2) return false;
+
+        var setA = new HashSet<Card.SuitType>();
+        var setB = new HashSet<Card.SuitType>();
+        foreach (Card c in a)
+            if (c.suit != Card.SuitType.Joker) setA.Add(c.suit);
+        foreach (Card c in b)
+            if (c.suit != Card.SuitType.Joker) setB.Add(c.suit);
+
+        if (setA.Count != setB.Count) return false;
+        foreach (var s in setA)
+            if (!setB.Contains(s)) return false;
+        return true;
+    }
+
+    private void RefreshBattleInfoUI()
+    {
+        if (battleInfoPanel == null) return;
+        battleInfoPanel.Refresh(isRevolution, IsSuitLocked(), currentFieldCards);
     }
 
     private bool ApplySpecialEffects(List<Card> cards, string playType, int playerIndex, bool wasFieldSingleJoker)
@@ -890,9 +970,10 @@ public class GameManager : MonoBehaviour
         currentFieldKaidanMin = 0;
         currentFieldKaidanMax = 0;
         consecutivePassCount = 0;
-        lockedSuit = null;
         lastPlaySuit = null;
         fieldIsSingleJoker = false;
+        lockedSuits.Clear();
+        currentFieldCards.Clear();
         RefreshBattleInfoUI();
     }
 

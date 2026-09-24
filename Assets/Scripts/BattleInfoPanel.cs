@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.InputSystem;
@@ -7,16 +8,30 @@ public class BattleInfoPanel : MonoBehaviour
     [Header("ルート")]
     [SerializeField] private RectTransform panelRoot;
 
-    [Header("革命パネル")]
+    [Header("革命")]
     [SerializeField] private GameObject revolutionOnObject;
     [SerializeField] private GameObject revolutionOffObject;
 
-    [Header("縛りアイコン")]
-    [SerializeField] private Image shibariIcon;
-    [SerializeField] private Sprite spriteHeart;
-    [SerializeField] private Sprite spriteSpade;
-    [SerializeField] private Sprite spriteDiamond;
-    [SerializeField] private Sprite spriteClub;
+    [Header("1枚縛り用")]
+    [SerializeField] private Image shibariSingleIcon;
+    [SerializeField] private Sprite singleHeart;
+    [SerializeField] private Sprite singleSpade;
+    [SerializeField] private Sprite singleDiamond;
+    [SerializeField] private Sprite singleClub;
+
+    [Header("2枚縛り用")]
+    [SerializeField] private Image shibariUpperIcon;
+    [SerializeField] private Image shibariLowerIcon;
+
+    [Header("2枚縛り用スプライト")]
+    [SerializeField] private Sprite heartUpper;
+    [SerializeField] private Sprite heartLower;
+    [SerializeField] private Sprite spadeUpper;
+    [SerializeField] private Sprite spadeLower;
+    [SerializeField] private Sprite diamondUpper;
+    [SerializeField] private Sprite diamondLower;
+    [SerializeField] private Sprite clubUpper;
+    [SerializeField] private Sprite clubLower;
 
     [Header("位置")]
     [SerializeField] private float hiddenY = 120f;
@@ -30,16 +45,14 @@ public class BattleInfoPanel : MonoBehaviour
     {
         isOpen = false;
         targetY = hiddenY;
-
         if (panelRoot != null)
         {
             Vector2 p = panelRoot.anchoredPosition;
             p.y = hiddenY;
             panelRoot.anchoredPosition = p;
         }
-
         SetRevolution(false);
-        SetShibari(null);
+        ClearShibari();
     }
 
     void Update()
@@ -53,11 +66,8 @@ public class BattleInfoPanel : MonoBehaviour
 
         var keyboard = Keyboard.current;
         if (keyboard == null) return;
-
         if (keyboard.digit1Key.wasPressedThisFrame || keyboard.numpad1Key.wasPressedThisFrame)
-        {
             ToggleOpen();
-        }
     }
 
     public void ToggleOpen()
@@ -70,43 +80,88 @@ public class BattleInfoPanel : MonoBehaviour
     {
         if (revolutionOnObject != null)
             revolutionOnObject.SetActive(isRevolution);
-
         if (revolutionOffObject != null)
             revolutionOffObject.SetActive(!isRevolution);
     }
 
-    public void SetShibari(Card.SuitType? suit)
+    void ClearShibari()
     {
-        if (shibariIcon == null) return;
-
-        if (!suit.HasValue || suit.Value == Card.SuitType.Joker)
+        if (shibariSingleIcon != null) shibariSingleIcon.gameObject.SetActive(false);
+        if (shibariUpperIcon != null) shibariUpperIcon.gameObject.SetActive(false);
+        if (shibariLowerIcon != null) shibariLowerIcon.gameObject.SetActive(false);
+    }
+    public void SetShibari(bool locked, List<Card> fieldCards)
+    {
+        ClearShibari();
+        if (!locked || fieldCards == null || fieldCards.Count == 0) return;
+        if (fieldCards.Count == 2)
         {
-            shibariIcon.gameObject.SetActive(false);
+            Sprite upper = GetUpperSprite(fieldCards[0].suit);
+            Sprite lower = GetLowerSprite(fieldCards[1].suit);
+
+            if (shibariUpperIcon != null && upper != null)
+            {
+                shibariUpperIcon.sprite = upper;
+                shibariUpperIcon.gameObject.SetActive(true);
+            }
+            if (shibariLowerIcon != null && lower != null)
+            {
+                shibariLowerIcon.sprite = lower;
+                shibariLowerIcon.gameObject.SetActive(true);
+            }
             return;
         }
 
-        Sprite sp = suit.Value switch
+        // 1枚
+        Card.SuitType suit = fieldCards[0].suit;
+        if (suit == Card.SuitType.Joker) return;
+        Sprite single = GetSingleSprite(suit);
+        if (shibariSingleIcon != null && single != null)
         {
-            Card.SuitType.Heart => spriteHeart,
-            Card.SuitType.Spade => spriteSpade,
-            Card.SuitType.Diamond => spriteDiamond,
-            Card.SuitType.Club => spriteClub,
-            _ => null
-        };
-
-        if (sp == null)
-        {
-            shibariIcon.gameObject.SetActive(false);
-            return;
+            shibariSingleIcon.sprite = single;
+            shibariSingleIcon.gameObject.SetActive(true);
         }
-
-        shibariIcon.sprite = sp;
-        shibariIcon.gameObject.SetActive(true);
     }
 
-    public void Refresh(bool isRevolution, Card.SuitType? lockedSuit)
+    Sprite GetSingleSprite(Card.SuitType suit)
+    {
+        return suit switch
+        {
+            Card.SuitType.Heart => singleHeart,
+            Card.SuitType.Spade => singleSpade,
+            Card.SuitType.Diamond => singleDiamond,
+            Card.SuitType.Club => singleClub,
+            _ => null
+        };
+    }
+
+    Sprite GetUpperSprite(Card.SuitType suit)
+    {
+        return suit switch
+        {
+            Card.SuitType.Heart => heartUpper,
+            Card.SuitType.Spade => spadeUpper,
+            Card.SuitType.Diamond => diamondUpper,
+            Card.SuitType.Club => clubUpper,
+            _ => null
+        };
+    }
+
+    Sprite GetLowerSprite(Card.SuitType suit)
+    {
+        return suit switch
+        {
+            Card.SuitType.Heart => heartLower,
+            Card.SuitType.Spade => spadeLower,
+            Card.SuitType.Diamond => diamondLower,
+            Card.SuitType.Club => clubLower,
+            _ => null
+        };
+    }
+
+    public void Refresh(bool isRevolution, bool isLocked, List<Card> fieldCards)
     {
         SetRevolution(isRevolution);
-        SetShibari(lockedSuit);
+        SetShibari(isLocked, fieldCards);
     }
 }

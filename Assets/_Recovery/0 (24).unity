@@ -1243,8 +1243,8 @@ MonoBehaviour:
   - {fileID: 21300000, guid: 41c4ffafe0be8124fb9634b875ffbc69, type: 3}
   handController: {fileID: 1133329807}
   thinkingEffect: {fileID: 1876308854}
-  npcController: {fileID: 298831920}
   battleInfoPanel: {fileID: 654634017}
+  npcController: {fileID: 298831920}
   fieldSlots:
   - {fileID: 1712527516}
   - {fileID: 1943518977}
