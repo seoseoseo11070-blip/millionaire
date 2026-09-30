@@ -18,14 +18,14 @@ public class GameManager : MonoBehaviour
     [Header("NPC")]
     [SerializeField] private NPCController npcController;
 
-    [Header("場")]
+    [Header("場スロット")]
     [SerializeField] private Transform[] fieldSlots;
 
     [Header("カードサイズ")]
     [SerializeField] private float cardWidth = 100f;
     [SerializeField] private float cardHeight = 140f;
 
-    [Header("場のカード")]
+    [Header("場のカードの潰し")]
     [Range(0.1f, 1.0f)]
     [SerializeField] private float fieldCardScaleY = 0.7f;
 
@@ -62,7 +62,6 @@ public class GameManager : MonoBehaviour
 
     private bool[] hasFinished;
 
-    // ===== 公開API =====
     public int GetCurrentFieldCardCount() => currentFieldCardCount;
     public int GetCurrentFieldCardStrength() => currentFieldCardStrength;
     public bool IsRevolution() => isRevolution;
@@ -150,7 +149,7 @@ public class GameManager : MonoBehaviour
                 if (c.suit == Card.SuitType.Joker) continue;
                 if (!IsSuitAllowed(c.suit))
                 {
-                    error = "縛り";
+                    error = "縛りのスートしか出せません";
                     playType = "";
                     return false;
                 }
@@ -271,6 +270,17 @@ public class GameManager : MonoBehaviour
     {
         List<Card> myHand = playerHands[0];
 
+        int[] dealCounts = new int[playerHands.Count];
+        int[] finalCounts = new int[playerHands.Count];
+        for (int i = 0; i < playerHands.Count; i++)
+        {
+            dealCounts[i] = 0;
+            finalCounts[i] = playerHands[i].Count;
+        }
+        if (battleInfoPanel != null)
+            battleInfoPanel.SetHandCounts(dealCounts);
+
+        int playerDealt = 0;
         foreach (Card card in myHand)
         {
             GameObject newCard = Instantiate(cardPrefab, handArea.parent);
@@ -307,8 +317,21 @@ public class GameManager : MonoBehaviour
             }
 
             newCard.transform.SetParent(handArea);
+
+            playerDealt++;
+            dealCounts[0] = playerDealt;
+            float ratio = myHand.Count > 0 ? (float)playerDealt / myHand.Count : 1f;
+            for (int p = 1; p < dealCounts.Length; p++)
+                dealCounts[p] = Mathf.RoundToInt(finalCounts[p] * ratio);
+
+            if (battleInfoPanel != null)
+                battleInfoPanel.SetHandCounts(dealCounts);
+
             yield return new WaitForSeconds(0.04f);
         }
+
+        if (battleInfoPanel != null)
+            battleInfoPanel.SetHandCounts(finalCounts);
 
         yield return new WaitForSeconds(1.0f);
         yield return StartCoroutine(AnimateHandSort());
@@ -388,6 +411,24 @@ public class GameManager : MonoBehaviour
         }
 
         if (layout != null) layout.enabled = true;
+    }
+
+    private void RefreshHandCountsOnly()
+    {
+        if (battleInfoPanel == null) return;
+
+        int[] counts = new int[playerHands.Count];
+        for (int i = 0; i < playerHands.Count; i++)
+            counts[i] = HasPlayerFinished(i) ? 0 : playerHands[i].Count;
+
+        battleInfoPanel.SetHandCounts(counts);
+    }
+
+    private void RefreshBattleInfoUI()
+    {
+        if (battleInfoPanel == null) return;
+        battleInfoPanel.Refresh(isRevolution, IsSuitLocked(), currentFieldCards);
+        RefreshHandCountsOnly();
     }
 
     private void StartTurnLoop()
@@ -530,6 +571,7 @@ public class GameManager : MonoBehaviour
         bool playAgain = ApplySpecialEffects(selectedCards, playType, 0, wasFieldSingleJoker);
 
         CheckFinish(0);
+        RefreshHandCountsOnly();
 
         if (isWaitingForSevenGive)
             return true;
@@ -600,6 +642,7 @@ public class GameManager : MonoBehaviour
             handController.SetupHand(spawnedCardObjects, this);
 
         CheckFinish(0);
+        RefreshHandCountsOnly();
         NextTurn();
         return true;
     }
@@ -628,6 +671,7 @@ public class GameManager : MonoBehaviour
         bool playAgain = ApplySpecialEffects(selectedCards, playType, cpuIndex, wasFieldSingleJoker);
 
         CheckFinish(cpuIndex);
+        RefreshHandCountsOnly();
 
         if (HasPlayerFinished(cpuIndex) && thinkingEffect != null)
             thinkingEffect.HideAll();
@@ -669,6 +713,7 @@ public class GameManager : MonoBehaviour
     private void UpdateFieldState(List<Card> cards, string playType, int playerIndex)
     {
         List<Card> previousField = new List<Card>(currentFieldCards);
+
         if (previousField.Count > 0)
         {
             if (previousField.Count == 2 && cards.Count == 2)
@@ -681,7 +726,7 @@ public class GameManager : MonoBehaviour
                         if (c.suit != Card.SuitType.Joker)
                             lockedSuits.Add(c.suit);
                     }
-                    Debug.Log($"2枚縛り: {string.Join(",", lockedSuits)}");
+                    Debug.Log($"2枚縛り発動: {string.Join(",", lockedSuits)}");
                 }
             }
             else if (previousField.Count == 1 && cards.Count == 1)
@@ -692,7 +737,7 @@ public class GameManager : MonoBehaviour
                 {
                     lockedSuits.Clear();
                     lockedSuits.Add(cards[0].suit);
-                    Debug.Log($"1枚縛り: {cards[0].suit}");
+                    Debug.Log($"1枚縛り発動: {cards[0].suit}");
                 }
             }
         }
@@ -718,7 +763,7 @@ public class GameManager : MonoBehaviour
 
         fieldIsSingleJoker = cards.Count == 1 && cards[0].suit == Card.SuitType.Joker;
 
-        string message = $"{PlayerName(playerIndex)}は{validator.FormatCards(cards)}を出した（{playType}";
+        string message = $"{PlayerName(playerIndex)}は{validator.FormatCards(cards)}を出した({playType})";
         AddRoundAction(message);
         if (playerIndex == 0)
             Debug.Log(message);
@@ -744,12 +789,6 @@ public class GameManager : MonoBehaviour
         foreach (var s in setA)
             if (!setB.Contains(s)) return false;
         return true;
-    }
-
-    private void RefreshBattleInfoUI()
-    {
-        if (battleInfoPanel == null) return;
-        battleInfoPanel.Refresh(isRevolution, IsSuitLocked(), currentFieldCards);
     }
 
     private bool ApplySpecialEffects(List<Card> cards, string playType, int playerIndex, bool wasFieldSingleJoker)
@@ -882,6 +921,8 @@ public class GameManager : MonoBehaviour
 
         if (toIndex == 0)
             AddReceivedCardsToPlayerHand(givenCards);
+
+        RefreshHandCountsOnly();
     }
 
     private void AddReceivedCardsToPlayerHand(List<Card> receivedCards)
@@ -1006,5 +1047,7 @@ public class GameManager : MonoBehaviour
 
         if (thinkingEffect != null && activePlayerIndex == playerIndex)
             thinkingEffect.HideAll();
+
+        RefreshHandCountsOnly();
     }
 }
