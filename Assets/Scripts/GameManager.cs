@@ -12,6 +12,9 @@ public class GameManager : MonoBehaviour
     [Header("NPC演出")]
     [SerializeField] private NPCThinkingEffect thinkingEffect;
 
+    [Header("NPC手札の表示")]
+    [SerializeField] private NpcHandView npcHandView;
+
     [Header("対戦情報UI")]
     [SerializeField] private BattleInfoPanel battleInfoPanel;
 
@@ -25,7 +28,7 @@ public class GameManager : MonoBehaviour
     [SerializeField] private float cardWidth = 100f;
     [SerializeField] private float cardHeight = 140f;
 
-    [Header("場のカードの潰し")]
+    [Header("場のカードの縦潰し")]
     [Range(0.1f, 1.0f)]
     [SerializeField] private float fieldCardScaleY = 0.7f;
 
@@ -277,6 +280,7 @@ public class GameManager : MonoBehaviour
             dealCounts[i] = 0;
             finalCounts[i] = playerHands[i].Count;
         }
+
         if (battleInfoPanel != null)
             battleInfoPanel.SetHandCounts(dealCounts);
 
@@ -326,12 +330,16 @@ public class GameManager : MonoBehaviour
 
             if (battleInfoPanel != null)
                 battleInfoPanel.SetHandCounts(dealCounts);
+            if (npcHandView != null)
+                npcHandView.SetCountsFromPlayerHands(dealCounts);
 
             yield return new WaitForSeconds(0.04f);
         }
 
         if (battleInfoPanel != null)
             battleInfoPanel.SetHandCounts(finalCounts);
+
+        RefreshNpcHandViews();
 
         yield return new WaitForSeconds(1.0f);
         yield return StartCoroutine(AnimateHandSort());
@@ -413,21 +421,37 @@ public class GameManager : MonoBehaviour
         if (layout != null) layout.enabled = true;
     }
 
-    private void RefreshHandCountsOnly()
+    private void RefreshNpcHandViews()
     {
-        if (battleInfoPanel == null) return;
+        if (npcHandView == null)
+        {
+            Debug.LogWarning("GameManager: npcHandView が null(Inspector未設定)");
+            return;
+        }
 
         int[] counts = new int[playerHands.Count];
         for (int i = 0; i < playerHands.Count; i++)
             counts[i] = HasPlayerFinished(i) ? 0 : playerHands[i].Count;
 
-        battleInfoPanel.SetHandCounts(counts);
+        npcHandView.SetCountsFromPlayerHands(counts);
+    }
+
+    private void RefreshHandCountsOnly()
+    {
+        if (battleInfoPanel != null)
+        {
+            int[] counts = new int[playerHands.Count];
+            for (int i = 0; i < playerHands.Count; i++)
+                counts[i] = HasPlayerFinished(i) ? 0 : playerHands[i].Count;
+            battleInfoPanel.SetHandCounts(counts);
+        }
+        RefreshNpcHandViews();
     }
 
     private void RefreshBattleInfoUI()
     {
-        if (battleInfoPanel == null) return;
-        battleInfoPanel.Refresh(isRevolution, IsSuitLocked(), currentFieldCards);
+        if (battleInfoPanel != null)
+            battleInfoPanel.Refresh(isRevolution, IsSuitLocked(), currentFieldCards);
         RefreshHandCountsOnly();
     }
 
@@ -439,12 +463,17 @@ public class GameManager : MonoBehaviour
         {
             if (thinkingEffect != null)
                 thinkingEffect.HideAll();
+            if (npcHandView != null)
+                npcHandView.SetThinkingPlayer(0);
             NextTurn();
             return;
         }
 
         if (thinkingEffect != null)
             thinkingEffect.SetThinkingPlayer(activePlayerIndex);
+
+        if (npcHandView != null)
+            npcHandView.SetThinkingPlayer(activePlayerIndex);
 
         if (activePlayerIndex == 0)
         {
@@ -472,6 +501,8 @@ public class GameManager : MonoBehaviour
         {
             if (thinkingEffect != null)
                 thinkingEffect.HideAll();
+            if (npcHandView != null)
+                npcHandView.SetThinkingPlayer(0);
             NextTurn();
             return;
         }
@@ -763,7 +794,7 @@ public class GameManager : MonoBehaviour
 
         fieldIsSingleJoker = cards.Count == 1 && cards[0].suit == Card.SuitType.Joker;
 
-        string message = $"{PlayerName(playerIndex)}は{validator.FormatCards(cards)}を出した({playType})";
+        string message = $"{PlayerName(playerIndex)}は{validator.FormatCards(cards)}を出した（{playType}）";
         AddRoundAction(message);
         if (playerIndex == 0)
             Debug.Log(message);
@@ -865,6 +896,8 @@ public class GameManager : MonoBehaviour
 
         if (thinkingEffect != null)
             thinkingEffect.HideAll();
+        if (npcHandView != null)
+            npcHandView.SetThinkingPlayer(0);
 
         yield return new WaitForSeconds(2f);
 
@@ -885,6 +918,8 @@ public class GameManager : MonoBehaviour
                 handController.SetupHand(spawnedCardObjects, this);
             if (thinkingEffect != null)
                 thinkingEffect.SetThinkingPlayer(0);
+            if (npcHandView != null)
+                npcHandView.SetThinkingPlayer(0);
             Debug.Log("場が流れた");
         }
         else
@@ -892,6 +927,8 @@ public class GameManager : MonoBehaviour
             activePlayerIndex = playerIndex;
             if (thinkingEffect != null)
                 thinkingEffect.SetThinkingPlayer(playerIndex);
+            if (npcHandView != null)
+                npcHandView.SetThinkingPlayer(playerIndex);
             Debug.Log($"場が流れた。{PlayerName(playerIndex)}の番");
             Invoke(nameof(CallNpcAI), Random.Range(1.0f, 2.0f));
         }
@@ -1047,6 +1084,8 @@ public class GameManager : MonoBehaviour
 
         if (thinkingEffect != null && activePlayerIndex == playerIndex)
             thinkingEffect.HideAll();
+        if (npcHandView != null && activePlayerIndex == playerIndex)
+            npcHandView.SetThinkingPlayer(0);
 
         RefreshHandCountsOnly();
     }

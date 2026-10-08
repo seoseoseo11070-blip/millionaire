@@ -19,7 +19,7 @@ public class BattleInfoPanel : MonoBehaviour
     [SerializeField] private Sprite singleDiamond;
     [SerializeField] private Sprite singleClub;
 
-    [Header("2枚縛り")]
+    [Header("2枚縛り用Image")]
     [SerializeField] private Image shibariUpperIcon;
     [SerializeField] private Image shibariLowerIcon;
 
@@ -36,10 +36,10 @@ public class BattleInfoPanel : MonoBehaviour
     [Header("手札枚数")]
     [SerializeField] private Sprite[] digitSprites = new Sprite[10];
 
-    [Header("数字親")]
+    [Header("数字を置く親")]
     [SerializeField] private RectTransform digitParent;
 
-    [Header("1の位の座標(0=プレイヤー）")]
+    [Header("1の位の座標")]
     [SerializeField]
     private Vector2[] onesPositions = new Vector2[]
     {
@@ -59,10 +59,10 @@ public class BattleInfoPanel : MonoBehaviour
         new Vector2(60f, -60f),
     };
 
-    [Header("数字サイズ")]
+    [Header("数字のサイズ")]
     [SerializeField] private Vector2 digitDisplaySize = new Vector2(16.832f, 16.832f);
 
-    [Header("パネル開閉位置")]
+    [Header("パネル位置")]
     [SerializeField] private float hiddenY = 120f;
     [SerializeField] private float shownY = -20f;
     [SerializeField] private float slideSpeed = 12f;
@@ -199,18 +199,10 @@ public class BattleInfoPanel : MonoBehaviour
 
     void EnsureDigitImages()
     {
-        if (digitSprites == null || digitSprites.Length < 10)
-        {
-            Debug.LogWarning("digitSprites が不足している");
-            return;
-        }
+        if (digitSprites == null || digitSprites.Length < 10) return;
 
         RectTransform parent = digitParent != null ? digitParent : panelRoot;
-        if (parent == null)
-        {
-            Debug.LogWarning("digitParent / panelRoot がありません");
-            return;
-        }
+        if (parent == null) return;
 
         const int seatCount = 4;
 
@@ -300,6 +292,7 @@ public class BattleInfoPanel : MonoBehaviour
                 if (img != null) img.transform.SetAsLastSibling();
         }
     }
+
     public void SetHandCounts(int[] counts)
     {
         EnsureDigitImages();
