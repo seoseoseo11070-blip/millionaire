@@ -127,15 +127,25 @@ public class BattleInfoPanel : MonoBehaviour
         if (shibariLowerIcon != null) shibariLowerIcon.gameObject.SetActive(false);
     }
 
-    public void SetShibari(bool locked, List<Card> fieldCards)
+    public void SetShibari(bool locked, List<Card.SuitType> lockSuits)
     {
         ClearShibari();
-        if (!locked || fieldCards == null || fieldCards.Count == 0) return;
+        if (!locked || lockSuits == null || lockSuits.Count == 0)
+            return;
 
-        if (fieldCards.Count == 2)
+        var suits = new List<Card.SuitType>();
+        foreach (var s in lockSuits)
         {
-            Sprite upper = GetUpperSprite(fieldCards[0].suit);
-            Sprite lower = GetLowerSprite(fieldCards[1].suit);
+            if (s == Card.SuitType.Joker) continue;
+            if (!suits.Contains(s))
+                suits.Add(s);
+        }
+        if (suits.Count == 0) return;
+
+        if (suits.Count >= 2)
+        {
+            Sprite upper = GetUpperSprite(suits[0]);
+            Sprite lower = GetLowerSprite(suits[1]);
 
             if (shibariUpperIcon != null && upper != null)
             {
@@ -150,10 +160,7 @@ public class BattleInfoPanel : MonoBehaviour
             return;
         }
 
-        Card.SuitType suit = fieldCards[0].suit;
-        if (suit == Card.SuitType.Joker) return;
-
-        Sprite single = GetSingleSprite(suit);
+        Sprite single = GetSingleSprite(suits[0]);
         if (shibariSingleIcon != null && single != null)
         {
             shibariSingleIcon.sprite = single;
@@ -334,9 +341,10 @@ public class BattleInfoPanel : MonoBehaviour
         BringDigitsToFront();
     }
 
-    public void Refresh(bool isRevolution, bool isLocked, List<Card> fieldCards)
+    public void Refresh(bool isRevolution, List<Card.SuitType> lockSuits)
     {
         SetRevolution(isRevolution);
-        SetShibari(isLocked, fieldCards);
+        bool locked = lockSuits != null && lockSuits.Count > 0;
+        SetShibari(locked, lockSuits);
     }
 }

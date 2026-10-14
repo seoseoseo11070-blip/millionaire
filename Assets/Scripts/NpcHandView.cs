@@ -20,21 +20,21 @@ public class NpcHandView : MonoBehaviour
         [Header("2枚目以降")]
         public Vector2 spacing = new Vector2(12f, -12f);
 
-        [Header("カードサイズ")]
+        [Header("カード1枚のサイズ")]
         public Vector2 cardSize = new Vector2(40f, 56f);
 
+        [Tooltip("0以外")]
         public int maxVisible = 12;
     }
 
     [SerializeField] private NpcSlot[] slots = new NpcSlot[3];
 
-    [Header("思考中")]
+    [Header("思考演出")]
     [SerializeField] private float thinkRaiseY = 18f;
     [SerializeField] private float raiseSpeed = 12f;
     [SerializeField] private float thinkInterval = 0.35f;
 
     private readonly Dictionary<int, int> actualCounts = new Dictionary<int, int>();
-    private readonly Dictionary<int, int> initialCounts = new Dictionary<int, int>();
     private int thinkingNpcIndex = -1;
 
     private class CardVisual
@@ -62,49 +62,21 @@ public class NpcHandView : MonoBehaviour
             }
         }
     }
-
     public int ToVisualCount(int npcIndex, int actualCount)
     {
         if (actualCount <= 0) return 0;
 
-        if (!initialCounts.ContainsKey(npcIndex) || initialCounts[npcIndex] <= 0)
-            initialCounts[npcIndex] = actualCount;
-
-        int initial = initialCounts[npcIndex];
-        int lost = Mathf.Max(0, initial - actualCount);
-
         if (npcIndex == 1)
-        {
-            int startVis = 11;
-            int visual = startVis - Mathf.FloorToInt(lost / 1.5f);
-            return Mathf.Clamp(visual, 1, startVis);
-        }
+            return Mathf.Min(11, actualCount); // NPC2
         else
-        {
-            int startVis = 6;
-            int visual = startVis - Mathf.FloorToInt(lost / 2.5f);
-            return Mathf.Clamp(visual, 1, startVis);
-        }
+            return Mathf.Min(6, actualCount);  // NPC1, NPC3
     }
 
     public void SetActualCount(int npcIndex, int actualCount)
     {
-        actualCount = Mathf.Max(0, actualCount);
-        actualCounts[npcIndex] = actualCount;
-
-        if (actualCount > 0)
-        {
-            if (!initialCounts.ContainsKey(npcIndex) || actualCount > initialCounts[npcIndex])
-                initialCounts[npcIndex] = actualCount;
-        }
-        else
-        {
-            initialCounts[npcIndex] = 0;
-        }
-
+        actualCounts[npcIndex] = Mathf.Max(0, actualCount);
         Rebuild(npcIndex);
     }
-
     public void SetCountsFromPlayerHands(int[] allPlayerCounts)
     {
         if (allPlayerCounts == null) return;
@@ -204,8 +176,8 @@ public class NpcHandView : MonoBehaviour
         slot.container.SetAsLastSibling();
 
         int actual = actualCounts.ContainsKey(npcIndex) ? actualCounts[npcIndex] : 0;
-        int visualCount = Mathf.Min(ToVisualCount(npcIndex, actual), Mathf.Max(1, slot.maxVisible));
-        if (actual <= 0) visualCount = 0;
+        int visualCount = ToVisualCount(npcIndex, actual);
+        visualCount = Mathf.Min(visualCount, Mathf.Max(0, slot.maxVisible));
 
         ClearChildren(slot.container);
 

@@ -12,11 +12,14 @@ public class GameManager : MonoBehaviour
     [Header("NPC演出")]
     [SerializeField] private NPCThinkingEffect thinkingEffect;
 
-    [Header("NPC手札の表示")]
+    [Header("NPC手札の裏表示")]
     [SerializeField] private NpcHandView npcHandView;
 
     [Header("対戦情報UI")]
     [SerializeField] private BattleInfoPanel battleInfoPanel;
+
+    [Header("勝利演出")]
+    [SerializeField] private VictoryPanel victoryPanel;
 
     [Header("NPC")]
     [SerializeField] private NPCController npcController;
@@ -32,6 +35,9 @@ public class GameManager : MonoBehaviour
     [Range(0.1f, 1.0f)]
     [SerializeField] private float fieldCardScaleY = 0.7f;
 
+    [Header("プレイヤー上がり後の高速プレイ")]
+    [SerializeField] private float fastPlayDelay = 0.1f;
+
     private readonly PlayValidator validator = new PlayValidator();
 
     private List<Card> deck = new List<Card>();
@@ -43,6 +49,7 @@ public class GameManager : MonoBehaviour
     private List<Card> currentFieldCards = new List<Card>();
 
     private HashSet<Card.SuitType> lockedSuits = new HashSet<Card.SuitType>();
+    private List<Card.SuitType> lockedSuitOrder = new List<Card.SuitType>();
 
     private int consecutivePassCount;
     private int lastPlayPlayerIndex = -1;
@@ -64,6 +71,9 @@ public class GameManager : MonoBehaviour
     private bool isClearingField;
 
     private bool[] hasFinished;
+    private List<int> finishOrder = new List<int>();
+    private bool isResolvingRanks;
+    private bool gameEnded;
 
     public int GetCurrentFieldCardCount() => currentFieldCardCount;
     public int GetCurrentFieldCardStrength() => currentFieldCardStrength;
@@ -89,9 +99,16 @@ public class GameManager : MonoBehaviour
 
     public Card.SuitType? GetLockedSuit()
     {
+        if (lockedSuitOrder != null && lockedSuitOrder.Count > 0)
+            return lockedSuitOrder[0];
         if (lockedSuits == null || lockedSuits.Count == 0) return null;
         foreach (var s in lockedSuits) return s;
         return null;
+    }
+
+    public List<Card.SuitType> GetLockedSuitList()
+    {
+        return new List<Card.SuitType>(lockedSuitOrder);
     }
 
     public List<Card> GetCurrentFieldCards()
@@ -117,7 +134,9 @@ public class GameManager : MonoBehaviour
         return activePlayerIndex == 0
             && isWaitingForPlayerInput
             && !isWaitingForSevenGive
-            && !isClearingField;
+            && !isClearingField
+            && !gameEnded
+            && !isResolvingRanks;
     }
 
     public List<Card> GetPlayerHandData(int playerIndex)
@@ -129,6 +148,10 @@ public class GameManager : MonoBehaviour
 
     public bool TryValidatePlay(List<Card> cards, out string playType, out string error)
     {
+        Card.SuitType? suitForValidator = null;
+        if (lockedSuits != null && lockedSuits.Count == 1)
+            suitForValidator = GetLockedSuit();
+
         if (!validator.TryValidate(
             cards,
             currentFieldCardCount,
@@ -136,7 +159,7 @@ public class GameManager : MonoBehaviour
             currentFieldPlayType,
             isRevolution,
             fieldIsSingleJoker,
-            GetLockedSuit(),
+            suitForValidator,
             currentFieldKaidanMin,
             currentFieldKaidanMax,
             out playType,
@@ -152,7 +175,7 @@ public class GameManager : MonoBehaviour
                 if (c.suit == Card.SuitType.Joker) continue;
                 if (!IsSuitAllowed(c.suit))
                 {
-                    error = "縛りのスートしか出せません";
+                    error = "縛り";
                     playType = "";
                     return false;
                 }
@@ -177,6 +200,8 @@ public class GameManager : MonoBehaviour
         spawnedCardDatas.Clear();
         currentFieldCards.Clear();
         lockedSuits.Clear();
+        lockedSuitOrder.Clear();
+        finishOrder.Clear();
 
         currentFieldCardCount = 0;
         currentFieldCardStrength = 0;
@@ -192,6 +217,8 @@ public class GameManager : MonoBehaviour
         isClearingField = false;
         activePlayerIndex = 0;
         isWaitingForPlayerInput = false;
+        isResolvingRanks = false;
+        gameEnded = false;
 
         hasFinished = new bool[playerCount];
 
@@ -423,11 +450,7 @@ public class GameManager : MonoBehaviour
 
     private void RefreshNpcHandViews()
     {
-        if (npcHandView == null)
-        {
-            Debug.LogWarning("GameManager: npcHandView が null(Inspector未設定)");
-            return;
-        }
+        if (npcHandView == null) return;
 
         int[] counts = new int[playerHands.Count];
         for (int i = 0; i < playerHands.Count; i++)
@@ -451,13 +474,14 @@ public class GameManager : MonoBehaviour
     private void RefreshBattleInfoUI()
     {
         if (battleInfoPanel != null)
-            battleInfoPanel.Refresh(isRevolution, IsSuitLocked(), currentFieldCards);
+            battleInfoPanel.Refresh(isRevolution, GetLockedSuitList());
+
         RefreshHandCountsOnly();
     }
 
     private void StartTurnLoop()
     {
-        if (isClearingField) return;
+        if (gameEnded || isResolvingRanks || isClearingField) return;
 
         if (HasPlayerFinished(activePlayerIndex))
         {
@@ -493,6 +517,7 @@ public class GameManager : MonoBehaviour
 
     private void CallNpcAI()
     {
+        if (gameEnded || isResolvingRanks) return;
         if (npcController == null) return;
         if (isClearingField) return;
         if (activePlayerIndex < 0 || activePlayerIndex >= playerHands.Count) return;
@@ -512,7 +537,7 @@ public class GameManager : MonoBehaviour
 
     public void NextTurn()
     {
-        if (isClearingField) return;
+        if (gameEnded || isResolvingRanks || isClearingField) return;
 
         int count = playerHands.Count;
         for (int i = 0; i < count; i++)
@@ -527,6 +552,7 @@ public class GameManager : MonoBehaviour
 
     public void ProcessPass()
     {
+        if (gameEnded || isResolvingRanks) return;
         if (isWaitingForSevenGive) return;
         if (isClearingField) return;
         if (activePlayerIndex == 0 && !isWaitingForPlayerInput) return;
@@ -559,6 +585,7 @@ public class GameManager : MonoBehaviour
 
     public bool CheckAndPlaySelectedObjects(List<GameObject> selectedObjects)
     {
+        if (gameEnded || isResolvingRanks) return false;
         if (isWaitingForSevenGive) return false;
         if (isClearingField) return false;
         if (activePlayerIndex != 0 || !isWaitingForPlayerInput) return false;
@@ -603,6 +630,9 @@ public class GameManager : MonoBehaviour
 
         CheckFinish(0);
         RefreshHandCountsOnly();
+
+        if (gameEnded || isResolvingRanks)
+            return true;
 
         if (isWaitingForSevenGive)
             return true;
@@ -680,6 +710,8 @@ public class GameManager : MonoBehaviour
 
     public void PlayCpuCards(int cpuIndex, List<Card> selectedCards)
     {
+        if (gameEnded || isResolvingRanks) return;
+
         if (selectedCards == null || selectedCards.Count == 0)
         {
             NextTurn();
@@ -706,6 +738,9 @@ public class GameManager : MonoBehaviour
 
         if (HasPlayerFinished(cpuIndex) && thinkingEffect != null)
             thinkingEffect.HideAll();
+
+        if (gameEnded || isResolvingRanks)
+            return;
 
         if (playAgain)
             return;
@@ -749,15 +784,17 @@ public class GameManager : MonoBehaviour
         {
             if (previousField.Count == 2 && cards.Count == 2)
             {
-                if (SameSuitSet(previousField, cards))
+                if (IsTwoCardShibariMatch(previousField, cards))
                 {
                     lockedSuits.Clear();
-                    foreach (Card c in cards)
+                    lockedSuitOrder.Clear();
+                    foreach (Card c in previousField)
                     {
-                        if (c.suit != Card.SuitType.Joker)
-                            lockedSuits.Add(c.suit);
+                        if (c.suit == Card.SuitType.Joker) continue;
+                        if (lockedSuits.Add(c.suit))
+                            lockedSuitOrder.Add(c.suit);
                     }
-                    Debug.Log($"2枚縛り発動: {string.Join(",", lockedSuits)}");
+                    Debug.Log($"2枚縛り発動: {string.Join(",", lockedSuitOrder)}");
                 }
             }
             else if (previousField.Count == 1 && cards.Count == 1)
@@ -767,7 +804,9 @@ public class GameManager : MonoBehaviour
                     && previousField[0].suit == cards[0].suit)
                 {
                     lockedSuits.Clear();
+                    lockedSuitOrder.Clear();
                     lockedSuits.Add(cards[0].suit);
+                    lockedSuitOrder.Add(cards[0].suit);
                     Debug.Log($"1枚縛り発動: {cards[0].suit}");
                 }
             }
@@ -794,7 +833,7 @@ public class GameManager : MonoBehaviour
 
         fieldIsSingleJoker = cards.Count == 1 && cards[0].suit == Card.SuitType.Joker;
 
-        string message = $"{PlayerName(playerIndex)}は{validator.FormatCards(cards)}を出した（{playType}）";
+        string message = $"{PlayerName(playerIndex)}は{validator.FormatCards(cards)}を出した（{playType})";
         AddRoundAction(message);
         if (playerIndex == 0)
             Debug.Log(message);
@@ -805,21 +844,42 @@ public class GameManager : MonoBehaviour
         RefreshBattleInfoUI();
     }
 
-    private bool SameSuitSet(List<Card> a, List<Card> b)
+    private bool IsTwoCardShibariMatch(List<Card> field, List<Card> play)
     {
-        if (a == null || b == null || a.Count != 2 || b.Count != 2) return false;
+        if (field == null || play == null || field.Count != 2 || play.Count != 2)
+            return false;
 
-        var setA = new HashSet<Card.SuitType>();
-        var setB = new HashSet<Card.SuitType>();
-        foreach (Card c in a)
-            if (c.suit != Card.SuitType.Joker) setA.Add(c.suit);
-        foreach (Card c in b)
-            if (c.suit != Card.SuitType.Joker) setB.Add(c.suit);
+        var fieldSuits = new List<Card.SuitType>();
+        foreach (Card c in field)
+        {
+            if (c.suit != Card.SuitType.Joker)
+                fieldSuits.Add(c.suit);
+        }
+        if (fieldSuits.Count == 0) return false;
 
-        if (setA.Count != setB.Count) return false;
-        foreach (var s in setA)
-            if (!setB.Contains(s)) return false;
-        return true;
+        var playSuits = new List<Card.SuitType>();
+        int playJokers = 0;
+        foreach (Card c in play)
+        {
+            if (c.suit == Card.SuitType.Joker) playJokers++;
+            else playSuits.Add(c.suit);
+        }
+
+        foreach (var s in playSuits)
+        {
+            if (!fieldSuits.Contains(s))
+                return false;
+        }
+
+        var remain = new List<Card.SuitType>(fieldSuits);
+        foreach (var s in playSuits)
+        {
+            int idx = remain.IndexOf(s);
+            if (idx < 0) return false;
+            remain.RemoveAt(idx);
+        }
+
+        return remain.Count <= playJokers;
     }
 
     private bool ApplySpecialEffects(List<Card> cards, string playType, int playerIndex, bool wasFieldSingleJoker)
@@ -829,14 +889,17 @@ public class GameManager : MonoBehaviour
             && cards[0].suit == Card.SuitType.Spade
             && cards[0].number == 3)
         {
-            StartCoroutine(DelayedClearFieldAndContinue(playerIndex));
-            return true;
+            if (!isResolvingRanks)
+                StartCoroutine(DelayedClearFieldAndContinue(playerIndex));
+            else
+                ClearFieldAfterSpecial();
+            return !isResolvingRanks;
         }
 
         if (playType == "4枚" && validator.IsSameNumberGroup(cards))
         {
             isRevolution = !isRevolution;
-            Debug.Log($"4枚革命 現在: {(isRevolution ? "革命中" : "通常")}");
+            Debug.Log($"革命 現在: {(isRevolution ? "革命中" : "通常")}");
             RefreshBattleInfoUI();
         }
 
@@ -849,8 +912,11 @@ public class GameManager : MonoBehaviour
 
         if (validator.ContainsNumber(cards, 8))
         {
-            StartCoroutine(DelayedClearFieldAndContinue(playerIndex));
-            return true;
+            if (!isResolvingRanks)
+                StartCoroutine(DelayedClearFieldAndContinue(playerIndex));
+            else
+                ClearFieldAfterSpecial();
+            return !isResolvingRanks;
         }
 
         int sevenCount = validator.CountSevens(cards);
@@ -860,6 +926,13 @@ public class GameManager : MonoBehaviour
         if (canGive <= 0) return false;
 
         int toIndex = FindNextAliveIndex(playerIndex);
+
+        // 高速決着中は7渡しを自動で最弱を渡す
+        if (isResolvingRanks)
+        {
+            TransferWeakestCards(playerIndex, toIndex, canGive);
+            return false;
+        }
 
         if (playerIndex == 0)
         {
@@ -903,6 +976,9 @@ public class GameManager : MonoBehaviour
 
         ClearFieldAfterSpecial();
         isClearingField = false;
+
+        if (gameEnded || isResolvingRanks)
+            yield break;
 
         if (HasPlayerFinished(playerIndex))
         {
@@ -956,7 +1032,7 @@ public class GameManager : MonoBehaviour
 
         Debug.Log($"7渡し {PlayerName(fromIndex)} → {PlayerName(toIndex)} に {count}枚");
 
-        if (toIndex == 0)
+        if (toIndex == 0 && !isResolvingRanks)
             AddReceivedCardsToPlayerHand(givenCards);
 
         RefreshHandCountsOnly();
@@ -1051,6 +1127,7 @@ public class GameManager : MonoBehaviour
         lastPlaySuit = null;
         fieldIsSingleJoker = false;
         lockedSuits.Clear();
+        lockedSuitOrder.Clear();
         currentFieldCards.Clear();
         RefreshBattleInfoUI();
     }
@@ -1080,7 +1157,10 @@ public class GameManager : MonoBehaviour
         if (playerHands[playerIndex].Count > 0) return;
 
         hasFinished[playerIndex] = true;
-        Debug.Log($"{PlayerName(playerIndex)}が上がった");
+        if (!finishOrder.Contains(playerIndex))
+            finishOrder.Add(playerIndex);
+
+        Debug.Log($"{PlayerName(playerIndex)}が上がった（{finishOrder.Count}位）");
 
         if (thinkingEffect != null && activePlayerIndex == playerIndex)
             thinkingEffect.HideAll();
@@ -1088,5 +1168,245 @@ public class GameManager : MonoBehaviour
             npcHandView.SetThinkingPlayer(0);
 
         RefreshHandCountsOnly();
+        if (finishOrder.Count >= playerHands.Count - 1)
+        {
+            for (int i = 0; i < playerHands.Count; i++)
+            {
+                if (!finishOrder.Contains(i))
+                {
+                    hasFinished[i] = true;
+                    finishOrder.Add(i);
+                    Debug.Log($"{PlayerName(i)}は最下位");
+                }
+            }
+            EndGameShowVictory();
+            return;
+        }
+
+        if (finishOrder.Count >= playerHands.Count)
+        {
+            EndGameShowVictory();
+            return;
+        }
+        if (playerIndex == 0 && finishOrder.Count == 1 && !isResolvingRanks && !gameEnded)
+            StartCoroutine(ResolveRemainingRanksFast());
+    }
+
+    private System.Collections.IEnumerator ResolveRemainingRanksFast()
+    {
+        isResolvingRanks = true;
+        isWaitingForPlayerInput = false;
+        CancelInvoke(nameof(CallNpcAI));
+
+        if (thinkingEffect != null)
+            thinkingEffect.HideAll();
+        if (npcHandView != null)
+            npcHandView.SetThinkingPlayer(0);
+
+        int safety = 0;
+        const int maxSteps = 400;
+
+        while (CountAlivePlayers() > 0 && safety < maxSteps && !gameEnded)
+        {
+            safety++;
+            int tries = 0;
+            while (HasPlayerFinished(activePlayerIndex) && tries < playerHands.Count)
+            {
+                activePlayerIndex = (activePlayerIndex + 1) % playerHands.Count;
+                tries++;
+            }
+
+            if (CountAlivePlayers() <= 0)
+                break;
+
+            if (activePlayerIndex == 0)
+            {
+                if (HasPlayerFinished(0))
+                {
+                    activePlayerIndex = (activePlayerIndex + 1) % playerHands.Count;
+                    continue;
+                }
+                break;
+            }
+
+            List<Card> hand = playerHands[activePlayerIndex];
+            if (hand == null || hand.Count == 0)
+            {
+                CheckFinish(activePlayerIndex);
+                yield return null;
+                continue;
+            }
+            yield return new WaitForSeconds(fastPlayDelay);
+
+            if (gameEnded) yield break;
+
+            List<Card> toPlay = FindAnyValidPlay(hand);
+            if (toPlay != null && toPlay.Count > 0)
+            {
+                Debug.Log($"高速: {PlayerName(activePlayerIndex)} が {validator.FormatCards(toPlay)} を出す");
+                FastPlayCards(activePlayerIndex, toPlay);
+            }
+            else
+            {
+                Debug.Log($"高速: {PlayerName(activePlayerIndex)} はパス");
+                FastPass(activePlayerIndex);
+            }
+
+            RefreshNpcHandViews();
+            RefreshHandCountsOnly();
+
+            if (finishOrder.Count >= playerHands.Count)
+                break;
+        }
+
+        isResolvingRanks = false;
+        EndGameShowVictory();
+    }
+    private List<Card> FindAnyValidPlay(List<Card> hand)
+    {
+        if (hand == null || hand.Count == 0) return null;
+
+        List<Card> sorted = new List<Card>(hand);
+        sorted.Sort((a, b) =>
+            validator.GetCardStrengthValue(a).CompareTo(validator.GetCardStrengthValue(b)));
+
+        foreach (Card c in sorted)
+        {
+            var trial = new List<Card> { c };
+            if (TryValidatePlay(trial, out _, out _))
+                return trial;
+        }
+
+        for (int i = 0; i < sorted.Count; i++)
+        {
+            for (int j = i + 1; j < sorted.Count; j++)
+            {
+                bool okPair = sorted[i].suit == Card.SuitType.Joker
+                    || sorted[j].suit == Card.SuitType.Joker
+                    || sorted[i].number == sorted[j].number;
+
+                if (!okPair) continue;
+
+                var trial = new List<Card> { sorted[i], sorted[j] };
+                if (TryValidatePlay(trial, out _, out _))
+                    return trial;
+            }
+        }
+
+        return null;
+    }
+
+    private void FastPlayCards(int cpuIndex, List<Card> selectedCards)
+    {
+        if (selectedCards == null || selectedCards.Count == 0)
+        {
+            FastPass(cpuIndex);
+            return;
+        }
+
+        if (!TryValidatePlay(selectedCards, out string playType, out _))
+        {
+            FastPass(cpuIndex);
+            return;
+        }
+
+        PlaceCardsOnField(selectedCards);
+
+        foreach (Card card in selectedCards)
+            playerHands[cpuIndex].Remove(card);
+
+        bool wasFieldSingleJoker = fieldIsSingleJoker;
+        UpdateFieldState(selectedCards, playType, cpuIndex);
+        bool playAgain = ApplySpecialEffects(selectedCards, playType, cpuIndex, wasFieldSingleJoker);
+
+        CheckFinish(cpuIndex);
+        RefreshHandCountsOnly();
+
+        if (gameEnded) return;
+
+        if (playAgain)
+            return;
+
+        int count = playerHands.Count;
+        for (int i = 0; i < count; i++)
+        {
+            activePlayerIndex = (activePlayerIndex + 1) % count;
+            if (!HasPlayerFinished(activePlayerIndex))
+                break;
+        }
+    }
+
+    private void FastPass(int playerIndex)
+    {
+        string message = $"{PlayerName(playerIndex)}はパスした";
+        AddRoundAction(message);
+
+        consecutivePassCount++;
+        int alive = CountAlivePlayers();
+        if (alive > 1 && consecutivePassCount >= alive - 1)
+            ClearFieldBecauseAllPassed();
+
+        int count = playerHands.Count;
+        for (int i = 0; i < count; i++)
+        {
+            activePlayerIndex = (activePlayerIndex + 1) % count;
+            if (!HasPlayerFinished(activePlayerIndex))
+                break;
+        }
+    }
+    private void EndGameShowVictory()
+    {
+        if (gameEnded) return;
+        gameEnded = true;
+
+        isWaitingForPlayerInput = false;
+        isResolvingRanks = false;
+        CancelInvoke(nameof(CallNpcAI));
+
+        if (thinkingEffect != null) thinkingEffect.HideAll();
+        if (npcHandView != null) npcHandView.SetThinkingPlayer(0);
+
+        for (int i = 0; i < playerHands.Count; i++)
+        {
+            if (!finishOrder.Contains(i))
+                finishOrder.Add(i);
+        }
+
+        ClearAllFieldSlots();
+        currentFieldCards.Clear();
+
+        int last = finishOrder[finishOrder.Count - 1];
+        if (last >= 0 && last < playerHands.Count)
+            playerHands[last].Clear();
+
+        if (last == 0)
+        {
+            foreach (var go in spawnedCardObjects)
+                if (go != null) Destroy(go);
+            spawnedCardObjects.Clear();
+            spawnedCardDatas.Clear();
+        }
+
+        RefreshNpcHandViews();
+        RefreshHandCountsOnly();
+
+        Debug.Log("===== 最終順位 =====");
+        for (int r = 0; r < finishOrder.Count; r++)
+            Debug.Log($"{r + 1}位: {PlayerName(finishOrder[r])}");
+
+        if (victoryPanel == null)
+        {
+            Debug.LogError("victoryPanel が null Inspector で設定");
+            StartCoroutine(FallbackReturnToTitle());
+            return;
+        }
+
+        victoryPanel.Show(new List<int>(finishOrder));
+    }
+
+    private System.Collections.IEnumerator FallbackReturnToTitle()
+    {
+        yield return new WaitForSecondsRealtime(5f);
+        UnityEngine.SceneManagement.SceneManager.LoadScene(0);
     }
 }
