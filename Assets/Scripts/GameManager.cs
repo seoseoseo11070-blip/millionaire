@@ -710,7 +710,7 @@ public class GameManager : MonoBehaviour
 
     public void PlayCpuCards(int cpuIndex, List<Card> selectedCards)
     {
-        if (gameEnded || isResolvingRanks) return;
+        if (gameEnded) return;
 
         if (selectedCards == null || selectedCards.Count == 0)
         {
@@ -926,8 +926,6 @@ public class GameManager : MonoBehaviour
         if (canGive <= 0) return false;
 
         int toIndex = FindNextAliveIndex(playerIndex);
-
-        // 高速決着中は7渡しを自動で最弱を渡す
         if (isResolvingRanks)
         {
             TransferWeakestCards(playerIndex, toIndex, canGive);
@@ -1209,6 +1207,7 @@ public class GameManager : MonoBehaviour
         while (CountAlivePlayers() > 0 && safety < maxSteps && !gameEnded)
         {
             safety++;
+
             int tries = 0;
             while (HasPlayerFinished(activePlayerIndex) && tries < playerHands.Count)
             {
@@ -1240,10 +1239,15 @@ public class GameManager : MonoBehaviour
 
             if (gameEnded) yield break;
 
-            List<Card> toPlay = FindAnyValidPlay(hand);
+            List<Card> toPlay = null;
+            if (npcController != null)
+                toPlay = npcController.DecideCards(hand);
+            else
+                toPlay = FindAnyValidPlay(hand);
+
             if (toPlay != null && toPlay.Count > 0)
             {
-                Debug.Log($"高速: {PlayerName(activePlayerIndex)} が {validator.FormatCards(toPlay)} を出す");
+                Debug.Log($"高速({difficultyLog()}): {PlayerName(activePlayerIndex)} → {validator.FormatCards(toPlay)}");
                 FastPlayCards(activePlayerIndex, toPlay);
             }
             else
@@ -1261,6 +1265,10 @@ public class GameManager : MonoBehaviour
 
         isResolvingRanks = false;
         EndGameShowVictory();
+    }
+    private string difficultyLog()
+    {
+        return "選択レベル";
     }
     private List<Card> FindAnyValidPlay(List<Card> hand)
     {

@@ -36,6 +36,14 @@ public class NPCController : MonoBehaviour
             gameManager.ProcessPass();
         }
     }
+    public List<Card> DecideCards(List<Card> hand)
+    {
+        if (hand == null || hand.Count == 0)
+            return new List<Card>();
+
+        List<Card> result = FindBestPlayableCards(hand);
+        return result ?? new List<Card>();
+    }
 
     private List<Card> FindBestPlayableCards(List<Card> hand)
     {
