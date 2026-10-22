@@ -1,15 +1,23 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.UI;
 using UnityEngine.InputSystem;
 
 public class PlayerHandController : MonoBehaviour
 {
     [SerializeField] private RectTransform cursorArrow;
 
+    [Header("矢印スプライト")]
+    [Tooltip("通常選択用")]
+    [SerializeField] private Sprite normalArrowSprite;
+
+    [Tooltip("7渡し用")]
+    [SerializeField] private Sprite sevenGiveArrowSprite;
+
     [Tooltip("カードの頭上から矢印までの高さ")]
     [SerializeField] private float arrowOffsetY = 0.5f;
 
-    [Tooltip("矢印の左右の位置微調整")]
+    [Tooltip("矢印の左右微調整")]
     [SerializeField] private float arrowOffsetX = 0f;
 
     [SerializeField] private float arrowWidth = 50f;
@@ -21,10 +29,29 @@ public class PlayerHandController : MonoBehaviour
     private bool isInputEnabled = false;
     private GameManager gameManager;
 
+    private Image cursorImage;
+    private Sprite cachedNormalSprite;
+
+    void Awake()
+    {
+        if (cursorArrow != null)
+            cursorImage = cursorArrow.GetComponent<Image>();
+
+        if (normalArrowSprite != null)
+            cachedNormalSprite = normalArrowSprite;
+        else if (cursorImage != null)
+            cachedNormalSprite = cursorImage.sprite;
+    }
+
     public void SetupHand(List<GameObject> spawnedCards, GameManager manager)
     {
         cardObjects = spawnedCards;
         gameManager = manager;
+
+        if (cardObjects != null && cardObjects.Count > 0)
+            currentCursorIndex = cardObjects.Count / 2;
+        else
+            currentCursorIndex = 0;
 
         selectedIndices.Clear();
         isInputEnabled = true;
@@ -34,121 +61,105 @@ public class PlayerHandController : MonoBehaviour
             cursorArrow.anchorMin = new Vector2(0.5f, 0.5f);
             cursorArrow.anchorMax = new Vector2(0.5f, 0.5f);
             cursorArrow.pivot = new Vector2(0.5f, 0.5f);
-            cursorArrow.gameObject.SetActive(false);
         }
 
-        if (cardObjects != null && cardObjects.Count > 0)
+        ApplyArrowVisual();
+        FocusArrowOnHandCenter();
+        UpdateCardVisuals();
+    }
+
+    public void FocusArrowOnHandCenter()
+    {
+        if (cardObjects == null || cardObjects.Count == 0)
         {
-            currentCursorIndex = cardObjects.Count / 2;
-            FocusArrowOnHandCenter();
-        }
-        else
-        {
-            currentCursorIndex = 0;
             if (cursorArrow != null)
                 cursorArrow.gameObject.SetActive(false);
+            return;
+        }
+
+        currentCursorIndex = cardObjects.Count / 2;
+        if (currentCursorIndex >= cardObjects.Count)
+            currentCursorIndex = cardObjects.Count - 1;
+
+        if (cursorArrow != null)
+            cursorArrow.gameObject.SetActive(false);
+
+        ApplyArrowVisual();
+        UpdateCardVisuals();
+        Invoke(nameof(ShowCursorAfterMove), 0.05f);
+    }
+
+    private void ShowCursorAfterMove()
+    {
+        if (cursorArrow != null && cardObjects != null && cardObjects.Count > 0)
+        {
+            ApplyArrowVisual();
+            cursorArrow.gameObject.SetActive(true);
+            UpdateCardVisuals();
         }
     }
 
     void Update()
     {
-        if (!isInputEnabled || cardObjects == null || cardObjects.Count == 0) return;
+        if (!isInputEnabled || gameManager == null) return;
+        if (cardObjects == null || cardObjects.Count == 0) return;
 
         var keyboard = Keyboard.current;
         if (keyboard == null) return;
 
-        if (keyboard.leftArrowKey.wasPressedThisFrame)
+        bool isSeven = gameManager.IsWaitingForSevenGive();
+
+        if (keyboard.leftArrowKey.wasPressedThisFrame || keyboard.aKey.wasPressedThisFrame)
         {
             currentCursorIndex--;
-            if (currentCursorIndex < 0) currentCursorIndex = cardObjects.Count - 1;
-            UpdateVisuals();
+            if (currentCursorIndex < 0)
+                currentCursorIndex = cardObjects.Count - 1;
+            UpdateCardVisuals();
         }
-
-        if (keyboard.rightArrowKey.wasPressedThisFrame)
+        if (keyboard.rightArrowKey.wasPressedThisFrame || keyboard.dKey.wasPressedThisFrame)
         {
             currentCursorIndex++;
-            if (currentCursorIndex >= cardObjects.Count) currentCursorIndex = 0;
-            UpdateVisuals();
+            if (currentCursorIndex >= cardObjects.Count)
+                currentCursorIndex = 0;
+            UpdateCardVisuals();
         }
-
-        if (keyboard.spaceKey.wasPressedThisFrame)
+        if (keyboard.upArrowKey.wasPressedThisFrame || keyboard.wKey.wasPressedThisFrame
+            || keyboard.spaceKey.wasPressedThisFrame)
         {
-            ToggleSelection(currentCursorIndex);
-            UpdateVisuals();
+            ToggleSelectCurrent();
         }
 
         if (keyboard.enterKey.wasPressedThisFrame || keyboard.numpadEnterKey.wasPressedThisFrame)
         {
-            TryPlayOrPassSelectedCards();
+            if (isSeven)
+                TryGiveSevenCards();
+            else
+                TryPlayOrPassSelectedCards();
+        }
+
+        if (!isSeven && (keyboard.pKey.wasPressedThisFrame || keyboard.backspaceKey.wasPressedThisFrame))
+        {
+            if (gameManager.IsMyTurn())
+                gameManager.ProcessPass();
         }
     }
 
-    private void ToggleSelection(int index)
+    private void ToggleSelectCurrent()
     {
-        index = Mathf.Clamp(index, 0, cardObjects.Count - 1);
+        if (currentCursorIndex < 0 || currentCursorIndex >= cardObjects.Count) return;
 
-        if (selectedIndices.Contains(index))
-        {
-            selectedIndices.Remove(index);
-            return;
-        }
+        if (selectedIndices.Contains(currentCursorIndex))
+            selectedIndices.Remove(currentCursorIndex);
+        else
+            selectedIndices.Add(currentCursorIndex);
 
-        int maxSelect = 4;
-        if (gameManager != null && gameManager.IsWaitingForSevenGive())
-            maxSelect = gameManager.GetSevenGiveCount();
-
-        if (selectedIndices.Count >= maxSelect)
-            selectedIndices.RemoveAt(0);
-
-        selectedIndices.Add(index);
+        UpdateCardVisuals();
     }
 
     private void TryPlayOrPassSelectedCards()
     {
         if (gameManager == null) return;
-
-        if (gameManager.IsWaitingForSevenGive())
-        {
-            List<GameObject> giveObjects = new List<GameObject>();
-            foreach (int index in selectedIndices)
-            {
-                if (index >= 0 && index < cardObjects.Count)
-                    giveObjects.Add(cardObjects[index]);
-            }
-
-            bool ok = gameManager.TryGiveCardsForSeven(giveObjects);
-            if (ok)
-            {
-                foreach (GameObject obj in giveObjects)
-                    cardObjects.Remove(obj);
-
-                selectedIndices.Clear();
-
-                if (cardObjects.Count > 0)
-                    currentCursorIndex = cardObjects.Count / 2;
-                else
-                {
-                    currentCursorIndex = 0;
-                    if (cursorArrow != null) cursorArrow.gameObject.SetActive(false);
-                }
-
-                if (cursorArrow != null) cursorArrow.gameObject.SetActive(false);
-                UpdateVisuals();
-                if (cardObjects.Count > 0)
-                    Invoke(nameof(ShowCursorAfterMove), 0.05f);
-            }
-            else
-            {
-                UpdateVisuals();
-            }
-            return;
-        }
-
-        if (!gameManager.IsMyTurn())
-        {
-            Debug.LogWarning("あなたの番ではありません");
-            return;
-        }
+        if (!gameManager.IsMyTurn()) return;
 
         if (selectedIndices.Count == 0)
         {
@@ -156,62 +167,69 @@ public class PlayerHandController : MonoBehaviour
             return;
         }
 
-        selectedIndices.RemoveAll(index => index < 0 || index >= cardObjects.Count);
-        if (selectedIndices.Count == 0)
+        List<GameObject> selected = new List<GameObject>();
+        selectedIndices.Sort();
+        foreach (int i in selectedIndices)
         {
-            gameManager.ProcessPass();
-            return;
+            if (i >= 0 && i < cardObjects.Count && cardObjects[i] != null)
+                selected.Add(cardObjects[i]);
         }
 
-        List<GameObject> selectedObjects = new List<GameObject>();
-        foreach (int index in selectedIndices)
-            selectedObjects.Add(cardObjects[index]);
-
-        bool canPlay = gameManager.CheckAndPlaySelectedObjects(selectedObjects);
-
-        if (canPlay)
+        if (gameManager.CheckAndPlaySelectedObjects(selected))
         {
-            foreach (GameObject obj in selectedObjects)
-                cardObjects.Remove(obj);
-
             selectedIndices.Clear();
-
-            if (gameManager.IsWaitingForSevenGive())
-            {
-                FocusArrowOnHandCenter();
-                return;
-            }
-
-            if (cardObjects.Count > 0)
-                FocusArrowOnHandCenter();
-            else
-            {
-                currentCursorIndex = 0;
-                if (cursorArrow != null)
-                    cursorArrow.gameObject.SetActive(false);
-            }
         }
-
-        UpdateVisuals();
     }
 
-    private void UpdateVisuals()
+    private void TryGiveSevenCards()
     {
-        if (cardObjects == null) return;
+        if (gameManager == null) return;
+        if (!gameManager.IsWaitingForSevenGive()) return;
 
-        if (cardObjects.Count > 0)
+        List<GameObject> selected = new List<GameObject>();
+        selectedIndices.Sort();
+        foreach (int i in selectedIndices)
         {
-            if (currentCursorIndex < 0 || currentCursorIndex >= cardObjects.Count)
-                currentCursorIndex = cardObjects.Count / 2;
+            if (i >= 0 && i < cardObjects.Count && cardObjects[i] != null)
+                selected.Add(cardObjects[i]);
+        }
+
+        if (gameManager.TryGiveCardsForSeven(selected))
+        {
+            selectedIndices.Clear();
+            ApplyArrowVisual();
+        }
+    }
+    private void ApplyArrowVisual()
+    {
+        if (cursorImage == null && cursorArrow != null)
+            cursorImage = cursorArrow.GetComponent<Image>();
+
+        if (cursorImage == null) return;
+
+        bool isSeven = gameManager != null && gameManager.IsWaitingForSevenGive();
+
+        if (isSeven && sevenGiveArrowSprite != null)
+        {
+            cursorImage.sprite = sevenGiveArrowSprite;
         }
         else
         {
-            currentCursorIndex = 0;
-            if (cursorArrow != null) cursorArrow.gameObject.SetActive(false);
-            return;
+            if (cachedNormalSprite != null)
+                cursorImage.sprite = cachedNormalSprite;
         }
+    }
 
-        selectedIndices.RemoveAll(index => index < 0 || index >= cardObjects.Count);
+    private void UpdateCardVisuals()
+    {
+        if (cardObjects == null) return;
+
+        if (cardObjects.Count > 0 && currentCursorIndex >= cardObjects.Count)
+            currentCursorIndex = cardObjects.Count - 1;
+        if (currentCursorIndex < 0)
+            currentCursorIndex = 0;
+
+        ApplyArrowVisual();
 
         for (int i = 0; i < cardObjects.Count; i++)
         {
@@ -226,7 +244,8 @@ public class PlayerHandController : MonoBehaviour
 
             if (i == currentCursorIndex && cursorArrow != null)
             {
-                cursorArrow.gameObject.SetActive(true);
+                if (!cursorArrow.gameObject.activeSelf)
+                    cursorArrow.gameObject.SetActive(true);
 
                 Vector3 cardWorldPos = rect.position;
                 float halfHeightWorld = rect.rect.height * 0.5f * rect.lossyScale.y;
@@ -239,69 +258,8 @@ public class PlayerHandController : MonoBehaviour
 
                 cursorArrow.localScale = Vector3.one;
                 cursorArrow.sizeDelta = new Vector2(arrowWidth, arrowHeight);
+                cursorArrow.SetAsLastSibling();
             }
         }
-
-        if (cursorArrow != null)
-            cursorArrow.SetAsLastSibling();
-    }
-    public void FocusArrowOnHandCenter()
-    {
-        selectedIndices.Clear();
-
-        if (cardObjects == null || cardObjects.Count == 0)
-        {
-            currentCursorIndex = 0;
-            if (cursorArrow != null)
-                cursorArrow.gameObject.SetActive(false);
-            return;
-        }
-
-        currentCursorIndex = Mathf.Clamp(cardObjects.Count / 2, 0, cardObjects.Count - 1);
-
-        if (cursorArrow != null)
-            cursorArrow.gameObject.SetActive(false);
-
-        UpdateCursorPositionOnly();
-
-
-        CancelInvoke(nameof(ShowCursorAfterMove));
-        Invoke(nameof(ShowCursorAfterMove), 0.05f);
-    }
-
-    private void UpdateCursorPositionOnly()
-    {
-        if (cursorArrow == null || cardObjects == null || cardObjects.Count == 0)
-            return;
-
-        currentCursorIndex = Mathf.Clamp(currentCursorIndex, 0, cardObjects.Count - 1);
-
-        GameObject cardObj = cardObjects[currentCursorIndex];
-        if (cardObj == null) return;
-
-        RectTransform rect = cardObj.GetComponent<RectTransform>();
-        if (rect == null) return;
-
-        Vector3 cardWorldPos = rect.position;
-        float halfHeightWorld = rect.rect.height * 0.5f * rect.lossyScale.y;
-
-        cursorArrow.position = new Vector3(
-            cardWorldPos.x + arrowOffsetX,
-            cardWorldPos.y + halfHeightWorld + arrowOffsetY,
-            cursorArrow.position.z
-        );
-        cursorArrow.localScale = Vector3.one;
-        cursorArrow.sizeDelta = new Vector2(arrowWidth, arrowHeight);
-    }
-
-    private void ShowCursorAfterMove()
-    {
-        if (cursorArrow == null || cardObjects == null || cardObjects.Count == 0)
-            return;
-
-        UpdateCursorPositionOnly();
-        cursorArrow.gameObject.SetActive(true);
-        cursorArrow.SetAsLastSibling();
-        UpdateVisuals();
     }
 }
