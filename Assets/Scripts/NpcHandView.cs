@@ -32,8 +32,12 @@ public class NpcHandView : MonoBehaviour
     [Header("思考演出")]
     [SerializeField] private float thinkRaiseY = 18f;
     [SerializeField] private float raiseSpeed = 12f;
-    [SerializeField] private float thinkInterval = 0.35f;
 
+    [Tooltip("NPCが考える秒数")]
+    [SerializeField] private float thinkDuration = 3.0f;
+
+    [Tooltip("1周")]
+    [SerializeField] private bool roundTripAsOneLap = true;
     private readonly Dictionary<int, int> actualCounts = new Dictionary<int, int>();
     private int thinkingNpcIndex = -1;
 
@@ -46,6 +50,9 @@ public class NpcHandView : MonoBehaviour
 
     private readonly Dictionary<int, List<CardVisual>> visuals = new Dictionary<int, List<CardVisual>>();
     private Coroutine thinkCo;
+
+    private readonly HashSet<int> thinkSelectedVisual = new HashSet<int>();
+    private int scanIndex = -1;
 
     void Update()
     {
@@ -62,6 +69,7 @@ public class NpcHandView : MonoBehaviour
             }
         }
     }
+
     public int ToVisualCount(int npcIndex, int actualCount)
     {
         if (actualCount <= 0) return 0;
@@ -77,6 +85,9 @@ public class NpcHandView : MonoBehaviour
         actualCounts[npcIndex] = Mathf.Max(0, actualCount);
         Rebuild(npcIndex);
     }
+
+
+
     public void SetCountsFromPlayerHands(int[] allPlayerCounts)
     {
         if (allPlayerCounts == null) return;
@@ -92,23 +103,10 @@ public class NpcHandView : MonoBehaviour
 
     public void SetThinkingPlayer(int playerIndex)
     {
-        if (thinkCo != null)
-        {
-            StopCoroutine(thinkCo);
-            thinkCo = null;
-        }
-
-        ResetAllRaise();
-
-        if (playerIndex <= 0)
-        {
-            thinkingNpcIndex = -1;
-            return;
-        }
-
-        thinkingNpcIndex = playerIndex - 1;
-        thinkCo = StartCoroutine(ThinkRaiseLoop(thinkingNpcIndex));
+        SetThinkingPlayer(playerIndex, 1);
     }
+    public bool IsThinking { get; private set; }
+
 
     void ResetAllRaise()
     {
@@ -117,39 +115,188 @@ public class NpcHandView : MonoBehaviour
                 cv.raiseY = 0f;
     }
 
-    IEnumerator ThinkRaiseLoop(int npcIndex)
+    public void SetThinkingPlayer(int playerIndex, int fieldCardCount)
     {
-        while (thinkingNpcIndex == npcIndex)
+        if (thinkCo != null)
         {
-            if (!visuals.ContainsKey(npcIndex) || visuals[npcIndex].Count == 0)
-            {
-                yield return new WaitForSeconds(thinkInterval);
-                continue;
-            }
-
-            var list = visuals[npcIndex];
-
-            foreach (var cv in list)
-                cv.raiseY = 0f;
-
-            int n = Mathf.Min(list.Count, Random.Range(1, 3));
-            var indices = new List<int>();
-            for (int i = 0; i < list.Count; i++)
-                indices.Add(i);
-
-            for (int i = 0; i < n; i++)
-            {
-                int pick = Random.Range(0, indices.Count);
-                int idx = indices[pick];
-                indices.RemoveAt(pick);
-                list[idx].raiseY = thinkRaiseY;
-            }
-
-            yield return new WaitForSeconds(thinkInterval);
+            StopCoroutine(thinkCo);
+            thinkCo = null;
         }
 
         ResetAllRaise();
+        thinkSelectedVisual.Clear();
+        scanIndex = -1;
+
+        if (playerIndex <= 0)
+        {
+            thinkingNpcIndex = -1;
+            IsThinking = false;
+            return;
+        }
+
+        thinkingNpcIndex = playerIndex - 1;
+        IsThinking = true;
+
+        int pickCount = Mathf.Max(1, fieldCardCount);
+        thinkCo = StartCoroutine(ThinkScanLoop(thinkingNpcIndex, pickCount));
     }
+
+    IEnumerator ThinkScanLoop(int npcIndex, int pickCount)
+    {
+
+        float waited = 0f;
+        while ((!visuals.ContainsKey(npcIndex) || visuals[npcIndex].Count == 0) && waited < 2f)
+        {
+            if (thinkingNpcIndex != npcIndex)
+            {
+                IsThinking = false;
+                thinkCo = null;
+                yield break;
+            }
+            waited += 0.1f;
+            yield return new WaitForSeconds(0.1f);
+        }
+
+        if (!visuals.ContainsKey(npcIndex) || visuals[npcIndex].Count == 0)
+        {
+            IsThinking = false;
+            thinkCo = null;
+            yield break;
+        }
+
+        var list = visuals[npcIndex];
+        int n = list.Count;
+
+        if (n <= 1)
+        {
+            ResetAllRaise();
+            thinkSelectedVisual.Clear();
+            scanIndex = -1;
+            IsThinking = false;
+            thinkCo = null;
+            yield break;
+        }
+
+        thinkSelectedVisual.Clear();
+        bool usePlaySelect = (n > 3);
+
+        if (usePlaySelect)
+        {
+            int take = Mathf.Min(Mathf.Max(1, pickCount), n);
+            var pool = new List<int>();
+            for (int i = 0; i < n; i++)
+                pool.Add(i);
+
+            for (int i = 0; i < take; i++)
+            {
+                int p = Random.Range(0, pool.Count);
+                thinkSelectedVisual.Add(pool[p]);
+                pool.RemoveAt(p);
+            }
+        }
+
+        var visitedPlay = new HashSet<int>();
+
+        bool fromLeft = Random.value < 0.5f;
+        int start = fromLeft ? 0 : n - 1;
+        int end = fromLeft ? n - 1 : 0;
+        int step = fromLeft ? 1 : -1;
+        scanIndex = start;
+
+        int stepsPerLap = Mathf.Max(1, (n - 1) * 2);
+        float interval = Mathf.Clamp(thinkDuration / stepsPerLap, 0.12f, 0.8f);
+
+        int safety = 0;
+        int maxScanSteps = stepsPerLap * 2 + n;
+
+        while (thinkingNpcIndex == npcIndex && safety < maxScanSteps)
+        {
+            safety++;
+            list = visuals[npcIndex];
+            if (list == null || list.Count == 0) break;
+
+            n = list.Count;
+            if (n <= 1) break;
+
+            scanIndex = Mathf.Clamp(scanIndex, 0, n - 1);
+            if (usePlaySelect && thinkSelectedVisual.Contains(scanIndex))
+                visitedPlay.Add(scanIndex);
+
+            ApplyScanRaise(list, scanIndex, visitedPlay);
+
+            yield return new WaitForSeconds(interval);
+
+            if (thinkingNpcIndex != npcIndex)
+            {
+                ResetAllRaise();
+                thinkSelectedVisual.Clear();
+                scanIndex = -1;
+                IsThinking = false;
+                thinkCo = null;
+                yield break;
+            }
+
+            if (usePlaySelect)
+            {
+                if (visitedPlay.Count >= thinkSelectedVisual.Count && thinkSelectedVisual.Count > 0)
+                    break;
+            }
+            else
+            {
+                if (safety >= stepsPerLap)
+                    break;
+            }
+
+            if (scanIndex == end)
+            {
+                step = -step;
+                int tmp = start;
+                start = end;
+                end = tmp;
+            }
+            scanIndex += step;
+        }
+
+        if (thinkingNpcIndex != npcIndex)
+        {
+            ResetAllRaise();
+            thinkSelectedVisual.Clear();
+            scanIndex = -1;
+            IsThinking = false;
+            thinkCo = null;
+            yield break;
+        }
+
+        // 演出終了
+        list = visuals.ContainsKey(npcIndex) ? visuals[npcIndex] : null;
+        if (list != null)
+        {
+            for (int i = 0; i < list.Count; i++)
+            {
+                bool keepPlay = thinkSelectedVisual.Contains(i) && visitedPlay.Contains(i);
+                list[i].raiseY = keepPlay ? thinkRaiseY : 0f;
+            }
+        }
+
+        scanIndex = -1;
+        IsThinking = false;
+        thinkCo = null;
+    }
+
+    void ApplyScanRaise(List<CardVisual> list, int currentScan, HashSet<int> visitedPlay)
+    {
+        for (int i = 0; i < list.Count; i++)
+        {
+            bool isScan = (i == currentScan);
+            bool keepPlay = thinkSelectedVisual.Contains(i) && visitedPlay.Contains(i);
+
+            if (isScan || keepPlay)
+                list[i].raiseY = thinkRaiseY;
+            else
+                list[i].raiseY = 0f;
+        }
+    }
+
 
     void Rebuild(int npcIndex)
     {

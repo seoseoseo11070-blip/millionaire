@@ -9,6 +9,10 @@ public class GameManager : MonoBehaviour
     [SerializeField] private Sprite[] cardSprites;
     [SerializeField] private PlayerHandController handController;
 
+
+    [Header("7渡し、渡す相手表示")]
+    [SerializeField] private SevenGiveIndicator sevenGiveIndicator;
+
     [Header("NPC演出")]
     [SerializeField] private NPCThinkingEffect thinkingEffect;
 
@@ -90,6 +94,41 @@ public class GameManager : MonoBehaviour
 
     public bool IsSuitLocked() => lockedSuits != null && lockedSuits.Count > 0;
 
+    [SerializeField] private float afterThinkDelay = 1f;
+
+    private System.Collections.IEnumerator CallNpcAIAfterThink()
+    {
+        float timeout = 10f;
+        float elapsed = 0f;
+
+        while (npcHandView != null && npcHandView.IsThinking && elapsed < timeout)
+        {
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        yield return new WaitForSeconds(afterThinkDelay);
+
+        if (gameEnded || isResolvingRanks) yield break;
+        if (isClearingField) yield break;
+        if (activePlayerIndex < 0 || activePlayerIndex >= playerHands.Count) yield break;
+
+        if (HasPlayerFinished(activePlayerIndex))
+        {
+            if (thinkingEffect != null)
+                thinkingEffect.HideAll();
+            if (npcHandView != null)
+                npcHandView.SetThinkingPlayer(0);
+            NextTurn();
+            yield break;
+        }
+
+        if (npcHandView != null)
+            npcHandView.SetThinkingPlayer(0);
+
+        if (npcController != null)
+            npcController.ThinkAndPlay(activePlayerIndex, playerHands[activePlayerIndex]);
+    }
     public bool IsSuitAllowed(Card.SuitType suit)
     {
         if (lockedSuits == null || lockedSuits.Count == 0) return true;
@@ -424,8 +463,9 @@ public class GameManager : MonoBehaviour
         }
 
         if (layoutGroup != null) layoutGroup.enabled = true;
+
         if (handController != null)
-            handController.SetupHand(spawnedCardObjects, this);
+            handController.SetupHand(spawnedCardObjects, this, true);
     }
 
     private void RearrangeRemainingHand()
@@ -446,6 +486,9 @@ public class GameManager : MonoBehaviour
         }
 
         if (layout != null) layout.enabled = true;
+
+        if (handController != null)
+            handController.SetupHand(spawnedCardObjects, this);
     }
 
     private void RefreshNpcHandViews()
@@ -497,7 +540,7 @@ public class GameManager : MonoBehaviour
             thinkingEffect.SetThinkingPlayer(activePlayerIndex);
 
         if (npcHandView != null)
-            npcHandView.SetThinkingPlayer(activePlayerIndex);
+            npcHandView.SetThinkingPlayer(activePlayerIndex, Mathf.Max(1, currentFieldCardCount));
 
         if (activePlayerIndex == 0)
         {
@@ -509,7 +552,7 @@ public class GameManager : MonoBehaviour
         {
             isWaitingForPlayerInput = false;
             if (npcController != null)
-                Invoke(nameof(CallNpcAI), Random.Range(2f, 4f));
+                StartCoroutine(CallNpcAIAfterThink());
             else
                 Debug.LogError("npcController が null です");
         }
@@ -624,6 +667,9 @@ public class GameManager : MonoBehaviour
 
         RearrangeRemainingHand();
 
+        if (handController != null)
+            handController.SetupHand(spawnedCardObjects, this);
+
         bool wasFieldSingleJoker = fieldIsSingleJoker;
         UpdateFieldState(selectedCards, playType, 0);
         bool playAgain = ApplySpecialEffects(selectedCards, playType, 0, wasFieldSingleJoker);
@@ -693,19 +739,25 @@ public class GameManager : MonoBehaviour
         }
 
         RearrangeRemainingHand();
+
+        if (handController != null)
+            handController.SetupHand(spawnedCardObjects, this);
+
         Debug.Log($"{PlayerName(sevenGiveToIndex)} に {sevenGiveCount}枚渡した");
 
         isWaitingForSevenGive = false;
         sevenGiveCount = 0;
         isWaitingForPlayerInput = false;
 
-        if (handController != null)
-            handController.SetupHand(spawnedCardObjects, this);
+        if (sevenGiveIndicator != null)
+            sevenGiveIndicator.Hide();
 
         CheckFinish(0);
         RefreshHandCountsOnly();
         NextTurn();
         return true;
+
+
     }
 
     public void PlayCpuCards(int cpuIndex, List<Card> selectedCards)
@@ -938,7 +990,11 @@ public class GameManager : MonoBehaviour
             sevenGiveCount = canGive;
             sevenGiveToIndex = toIndex;
             isWaitingForPlayerInput = true;
-            Debug.Log($"7渡し {canGive} 枚選んで Enter");
+            Debug.Log($"7渡し {canGive} 枚選んで Enter(相手: {PlayerName(toIndex)})");
+
+            if (sevenGiveIndicator != null)
+                sevenGiveIndicator.Show();
+
             if (handController != null)
                 handController.FocusArrowOnHandCenter();
             return false;
@@ -1004,7 +1060,7 @@ public class GameManager : MonoBehaviour
             if (npcHandView != null)
                 npcHandView.SetThinkingPlayer(playerIndex);
             Debug.Log($"場が流れた。{PlayerName(playerIndex)}の番");
-            Invoke(nameof(CallNpcAI), Random.Range(1.0f, 2.0f));
+            StartCoroutine(CallNpcAIAfterThink());
         }
     }
 
@@ -1116,6 +1172,7 @@ public class GameManager : MonoBehaviour
     private void ClearFieldAfterSpecial()
     {
         ClearAllFieldSlots();
+        sevenGiveIndicator.Hide();
         currentFieldCardCount = 0;
         currentFieldCardStrength = 0;
         currentFieldPlayType = "";
@@ -1194,7 +1251,8 @@ public class GameManager : MonoBehaviour
     {
         isResolvingRanks = true;
         isWaitingForPlayerInput = false;
-        CancelInvoke(nameof(CallNpcAI));
+        StopAllCoroutines();
+        // CancelInvoke(nameof(CallNpcAI));
 
         if (thinkingEffect != null)
             thinkingEffect.HideAll();
@@ -1364,12 +1422,17 @@ public class GameManager : MonoBehaviour
     }
     private void EndGameShowVictory()
     {
+        if (sevenGiveIndicator != null)
+        {
+            sevenGiveIndicator.Hide();
+        }
         if (gameEnded) return;
         gameEnded = true;
 
         isWaitingForPlayerInput = false;
         isResolvingRanks = false;
-        CancelInvoke(nameof(CallNpcAI));
+        StopAllCoroutines();
+        // CancelInvoke(nameof(CallNpcAI));
 
         if (thinkingEffect != null) thinkingEffect.HideAll();
         if (npcHandView != null) npcHandView.SetThinkingPlayer(0);
