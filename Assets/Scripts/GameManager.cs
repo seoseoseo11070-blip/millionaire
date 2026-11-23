@@ -1251,7 +1251,7 @@ public class GameManager : MonoBehaviour
     {
         isResolvingRanks = true;
         isWaitingForPlayerInput = false;
-        StopAllCoroutines();
+        // StopAllCoroutines();
         // CancelInvoke(nameof(CallNpcAI));
 
         if (thinkingEffect != null)

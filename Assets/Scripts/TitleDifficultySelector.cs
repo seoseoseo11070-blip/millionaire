@@ -13,6 +13,7 @@ public enum NpcDifficulty
 public class TitleDifficultySelector : MonoBehaviour, IPointerEnterHandler, IPointerExitHandler, IPointerClickHandler
 {
     public const string PrefsKey = "NpcDifficulty";
+    private static NpcDifficulty sessionDifficulty = NpcDifficulty.Weak;
 
     [Header("全体")]
     [SerializeField] private RectTransform panelRoot;
@@ -42,8 +43,11 @@ public class TitleDifficultySelector : MonoBehaviour, IPointerEnterHandler, IPoi
 
     void Start()
     {
-        difficulty = (NpcDifficulty)PlayerPrefs.GetInt(PrefsKey, (int)NpcDifficulty.Weak);
+        difficulty = NpcDifficulty.Weak;
+        sessionDifficulty = NpcDifficulty.Weak;
         ApplyVisual();
+
+        Debug.Log($"[タイトル] NPC強さ = {difficulty}");
 
         isOpen = false;
         targetX = hiddenX;
@@ -113,22 +117,16 @@ public class TitleDifficultySelector : MonoBehaviour, IPointerEnterHandler, IPoi
         };
     }
 
-    private void SaveDifficulty()
-    {
-        PlayerPrefs.SetInt(PrefsKey, (int)difficulty);
-        PlayerPrefs.Save();
-        Debug.Log($"NPC強さ: {difficulty}");
-    }
-
     public static NpcDifficulty LoadDifficulty()
     {
-        return (NpcDifficulty)PlayerPrefs.GetInt(PrefsKey, (int)NpcDifficulty.Weak);
+        return sessionDifficulty;
     }
     public static bool IsDifficultyPlayable(NpcDifficulty d)
     {
-        return d == NpcDifficulty.Weak || d == NpcDifficulty.Strong;
+        return d == NpcDifficulty.Weak
+            || d == NpcDifficulty.Normal
+            || d == NpcDifficulty.Strong;
     }
-
     public static bool IsCurrentDifficultyPlayable()
     {
         return IsDifficultyPlayable(LoadDifficulty());
@@ -139,7 +137,6 @@ public class TitleDifficultySelector : MonoBehaviour, IPointerEnterHandler, IPoi
         if (startButton == null) return;
         startButton.interactable = IsDifficultyPlayable(difficulty);
     }
-
     private void ChangeDifficulty(int delta)
     {
         int value = (int)difficulty + delta;
@@ -148,8 +145,8 @@ public class TitleDifficultySelector : MonoBehaviour, IPointerEnterHandler, IPoi
         if (next == difficulty) return;
 
         difficulty = next;
+        sessionDifficulty = next;
         ApplyVisual();
-        SaveDifficulty();
         UpdateStartButton();
     }
 }
