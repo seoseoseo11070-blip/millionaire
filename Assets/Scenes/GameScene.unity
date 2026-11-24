@@ -1139,6 +1139,8 @@ MonoBehaviour:
   hiddenY: 4
   shownY: 0
   slideSpeed: 12
+  noticeDropY: -2
+  noticeDownSeconds: 0.4
 --- !u!1 &690573391
 GameObject:
   m_ObjectHideFlags: 0
@@ -1592,7 +1594,8 @@ MonoBehaviour:
     maxVisible: 14
   thinkRaiseY: 1
   raiseSpeed: 10
-  thinkInterval: 0.35
+  thinkDuration: 3
+  roundTripAsOneLap: 1
 --- !u!114 &1111649081
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1749,6 +1752,7 @@ MonoBehaviour:
   cardHeight: 2.85
   fieldCardScaleY: 0.7
   fastPlayDelay: 0.3
+  afterThinkDelay: 1
 --- !u!114 &1133329807
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2081,7 +2085,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
-  m_Color: {r: 1, g: 1, b: 1, a: 1}
+  m_Color: {r: 0.21960786, g: 0.21960786, b: 0.21960786, a: 1}
   m_RaycastTarget: 1
   m_RaycastPadding: {x: 0, y: 0, z: 0, w: 0}
   m_Maskable: 1
@@ -2677,8 +2681,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Game::VictoryPanel
   root: {fileID: 1781596984}
-  backgroundImage: {fileID: 1275826803}
-  tableSprite: {fileID: 21300000, guid: eb38951251a522444a5b4c223759224f, type: 3}
+  tableBackground: {fileID: 1781596986}
   seatRankImages:
   - {fileID: 231835936}
   - {fileID: 1356925269}
@@ -2704,9 +2707,9 @@ MonoBehaviour:
   - {fileID: 21300000, guid: f78e335af0d68db4a8fab36c071ffd80, type: 3}
   - {fileID: 21300000, guid: 3d93f6bdd4c414441a186a53c850a20c, type: 3}
   - {fileID: 21300000, guid: 5c0da224d9d9dd246a79ab0a959fae2a, type: 3}
-  returnSeconds: 5
+  delayBetweenRanks: 1
+  delayAfterFirst: 5
   titleSceneName: TitleScene
-  titleSceneIndex: 0
 --- !u!1 &1791136986
 GameObject:
   m_ObjectHideFlags: 0

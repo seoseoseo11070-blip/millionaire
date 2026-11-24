@@ -7,131 +7,120 @@ using UnityEngine.SceneManagement;
 public class VictoryPanel : MonoBehaviour
 {
     [SerializeField] private GameObject root;
-    [SerializeField] private Image backgroundImage;
-    [SerializeField] private Sprite tableSprite;
+    [SerializeField] private Image tableBackground;
+    [SerializeField] private Image[] seatRankImages;
 
-    [Tooltip("0=プレイヤー, 1=NPC1, 2=NPC2, 3=NPC3")]
-    [SerializeField] private Image[] seatRankImages = new Image[4];
+    [Header("1〜4位スプライト")]
+    [SerializeField] private Sprite[] playerRankSprites;
+    [SerializeField] private Sprite[] npc1RankSprites;
+    [SerializeField] private Sprite[] npc2RankSprites;
+    [SerializeField] private Sprite[] npc3RankSprites;
 
-    [SerializeField] private Sprite[] playerRankSprites = new Sprite[4];
-    [SerializeField] private Sprite[] npc1RankSprites = new Sprite[4];
-    [SerializeField] private Sprite[] npc2RankSprites = new Sprite[4];
-    [SerializeField] private Sprite[] npc3RankSprites = new Sprite[4];
+    [Header("発表タイミング")]
+    [SerializeField] private float delayBetweenRanks = 1.0f;
+    [SerializeField] private float delayAfterFirst = 5.0f;
 
-    [Header("タイトルへ")]
-    [SerializeField] private float returnSeconds = 5f;
-    [Tooltip("Build Settings のシーン名。空なら Index を使う")]
-    [SerializeField] private string titleSceneName = "";
-    [SerializeField] private int titleSceneIndex = 0;
+    [SerializeField] private string titleSceneName = "TitleScene";
 
     void Awake()
     {
+        HideAllRankImages();
         if (root != null)
             root.SetActive(false);
     }
 
-    public void Show(List<int> finishOrder)
+    void HideAllRankImages()
     {
-        Debug.Log($"[Victory] Show 呼び出し count={finishOrder?.Count}");
-        GameObject panel = root != null ? root : gameObject;
-        panel.SetActive(true);
-        panel.transform.SetAsLastSibling();
-
-        Canvas canvas = panel.GetComponentInParent<Canvas>();
-        if (canvas == null)
-            canvas = panel.GetComponent<Canvas>();
-        if (canvas != null)
+        if (seatRankImages == null) return;
+        for (int i = 0; i < seatRankImages.Length; i++)
         {
-            canvas.enabled = true;
-            canvas.overrideSorting = true;
-            canvas.sortingOrder = 999;
+            if (seatRankImages[i] == null) continue;
+            seatRankImages[i].sprite = null;
+            seatRankImages[i].enabled = false;
+            seatRankImages[i].gameObject.SetActive(false);
         }
-
-        if (backgroundImage != null)
-        {
-            if (tableSprite != null)
-                backgroundImage.sprite = tableSprite;
-            backgroundImage.enabled = true;
-            backgroundImage.color = Color.white;
-            backgroundImage.gameObject.SetActive(true);
-        }
-
-        int[] rankByPlayer = new int[4];
-        if (finishOrder != null)
-        {
-            for (int r = 0; r < finishOrder.Count && r < 4; r++)
-            {
-                int p = finishOrder[r];
-                if (p >= 0 && p < 4)
-                {
-                    rankByPlayer[p] = r + 1;
-                    Debug.Log($"[Victory] {r + 1}位 = index {p}");
-                }
-            }
-        }
-
-        for (int seat = 0; seat < 4; seat++)
-        {
-            if (seatRankImages == null || seat >= seatRankImages.Length || seatRankImages[seat] == null)
-            {
-                Debug.LogWarning($"[Victory] seatRankImages[{seat}] なし");
-                continue;
-            }
-
-            int rank = rankByPlayer[seat];
-            Sprite sp = GetRankSprite(seat, rank);
-            if (sp != null)
-            {
-                seatRankImages[seat].sprite = sp;
-                seatRankImages[seat].enabled = true;
-                seatRankImages[seat].color = Color.white;
-                seatRankImages[seat].gameObject.SetActive(true);
-            }
-            else
-            {
-                seatRankImages[seat].gameObject.SetActive(false);
-                Debug.LogWarning($"[Victory] 席{seat} の {rank}位スプライトなし");
-            }
-        }
-
-        StopAllCoroutines();
-        StartCoroutine(ReturnToTitleAfterDelay());
     }
 
-    Sprite GetRankSprite(int playerIndex, int rank1to4)
+    public void Show(List<int> finishOrder)
     {
-        if (rank1to4 < 1 || rank1to4 > 4) return null;
-        int i = rank1to4 - 1;
-        Sprite[] arr = playerIndex switch
+        if (root != null)
+            root.SetActive(true);
+
+        HideAllRankImages(); // 全部消す
+
+        StopAllCoroutines();
+        StartCoroutine(RevealRanksThenTitle(finishOrder));
+    }
+
+
+    private IEnumerator RevealRanksThenTitle(List<int> finishOrder)
+    {
+        if (finishOrder == null || finishOrder.Count == 0)
         {
-            0 => playerRankSprites,
-            1 => npc1RankSprites,
-            2 => npc2RankSprites,
-            3 => npc3RankSprites,
-            _ => null
-        };
-        if (arr == null || i >= arr.Length) return null;
+            yield return new WaitForSecondsRealtime(delayAfterFirst);
+            LoadTitle();
+            yield break;
+        }
+        for (int rank = finishOrder.Count; rank >= 1; rank--)
+        {
+            int orderIndex = rank - 1;
+            if (orderIndex < 0 || orderIndex >= finishOrder.Count) continue;
+
+            int playerIndex = finishOrder[orderIndex];
+            Sprite sp = GetRankSprite(playerIndex, rank);
+
+            int seat = Mathf.Clamp(playerIndex, 0, seatRankImages != null ? seatRankImages.Length - 1 : 0);
+            if (seatRankImages != null && seat < seatRankImages.Length && seatRankImages[seat] != null)
+            {
+                seatRankImages[seat].gameObject.SetActive(true);
+                seatRankImages[seat].sprite = sp;
+                seatRankImages[seat].enabled = sp != null;
+                seatRankImages[seat].transform.SetAsLastSibling();
+            }
+
+            Debug.Log($"順位発表: {rank}位 → {PlayerLabel(playerIndex)}");
+            if (rank > 1)
+                yield return new WaitForSecondsRealtime(delayBetweenRanks);
+        }
+
+        // 5秒
+        yield return new WaitForSecondsRealtime(delayAfterFirst);
+        LoadTitle();
+    }
+
+    private Sprite GetRankSprite(int playerIndex, int rank)
+    {
+        int i = Mathf.Clamp(rank - 1, 0, 3);
+        switch (playerIndex)
+        {
+            case 0: return GetSafe(playerRankSprites, i);
+            case 1: return GetSafe(npc1RankSprites, i);
+            case 2: return GetSafe(npc2RankSprites, i);
+            case 3: return GetSafe(npc3RankSprites, i);
+            default: return null;
+        }
+    }
+
+    private Sprite GetSafe(Sprite[] arr, int i)
+    {
+        if (arr == null || i < 0 || i >= arr.Length) return null;
         return arr[i];
     }
 
-    IEnumerator ReturnToTitleAfterDelay()
+    private string PlayerLabel(int playerIndex)
     {
-        Debug.Log($"[Victory] {returnSeconds}秒後にタイトルへ");
-        yield return new WaitForSecondsRealtime(returnSeconds);
-        if (!string.IsNullOrEmpty(titleSceneName))
+        return playerIndex == 0 ? "あなた" : $"NPC{playerIndex}";
+    }
+
+    private void LoadTitle()
+    {
+        if (!string.IsNullOrEmpty(titleSceneName)
+            && Application.CanStreamedLevelBeLoaded(titleSceneName))
         {
-            try
-            {
-                SceneManager.LoadScene(titleSceneName);
-                yield break;
-            }
-            catch (System.Exception e)
-            {
-                Debug.LogWarning($"[Victory] 読み込み失敗: {e.Message}");
-            }
+            SceneManager.LoadScene(titleSceneName);
+            return;
         }
 
-        Debug.Log($"[Victory] LoadScene index={titleSceneIndex}");
-        SceneManager.LoadScene(titleSceneIndex);
+        SceneManager.LoadScene(0);
     }
 }

@@ -67,6 +67,18 @@ public class BattleInfoPanel : MonoBehaviour
     [SerializeField] private float shownY = -20f;
     [SerializeField] private float slideSpeed = 12f;
 
+    // [Header("縛り・革命のときの下げる")]
+    // [SerializeField] private float shibariDropY = -2f;
+    // [SerializeField] private float revolutionDropY = -2f;
+
+    [Header("下げ（一瞬）")]
+    [SerializeField] private float noticeDropY = -2f;
+    [SerializeField] private float noticeDownSeconds = 0.4f;
+
+    private bool isLockedNow;
+    private bool isRevolutionNow;
+    private bool inputLockedByNotice; // 上がるまで無効
+    private Coroutine noticeCo;
     private bool isOpen;
     private float targetY;
 
@@ -76,18 +88,26 @@ public class BattleInfoPanel : MonoBehaviour
     void Awake()
     {
         isOpen = false;
-        targetY = hiddenY;
+        isLockedNow = false;
+        isRevolutionNow = false;
+        inputLockedByNotice = false;
+        RecalcTargetY();
 
         if (panelRoot != null)
         {
             Vector2 p = panelRoot.anchoredPosition;
-            p.y = hiddenY;
+            p.y = targetY;
             panelRoot.anchoredPosition = p;
         }
 
         SetRevolution(false);
         ClearShibari();
         EnsureDigitImages();
+    }
+
+    void RecalcTargetY()
+    {
+        targetY = isOpen ? shownY : hiddenY;
     }
 
     void Update()
@@ -99,6 +119,8 @@ public class BattleInfoPanel : MonoBehaviour
             panelRoot.anchoredPosition = p;
         }
 
+        if (inputLockedByNotice) return; // 上がるまで無効
+
         var keyboard = Keyboard.current;
         if (keyboard == null) return;
 
@@ -108,9 +130,23 @@ public class BattleInfoPanel : MonoBehaviour
 
     public void ToggleOpen()
     {
+        if (inputLockedByNotice) return;
+
         isOpen = !isOpen;
-        targetY = isOpen ? shownY : hiddenY;
+        RecalcTargetY();
     }
+
+    // void RecalcTargetY()
+    // {
+    //     float y = isOpen ? shownY : hiddenY;
+
+    //     if (isLockedNow)
+    //         y += shibariDropY;
+    //     if (isRevolutionNow)
+    //         y += revolutionDropY;
+
+    //     targetY = y;
+    // }
 
     public void SetRevolution(bool isRevolution)
     {
@@ -343,8 +379,54 @@ public class BattleInfoPanel : MonoBehaviour
 
     public void Refresh(bool isRevolution, List<Card.SuitType> lockSuits)
     {
-        SetRevolution(isRevolution);
         bool locked = lockSuits != null && lockSuits.Count > 0;
+
+        bool shibariStarted = locked && !isLockedNow;
+        bool revolutionStarted = isRevolution && !isRevolutionNow;
+
+        isLockedNow = locked;
+        isRevolutionNow = isRevolution;
+
+        SetRevolution(isRevolution);
         SetShibari(locked, lockSuits);
+
+        if (shibariStarted || revolutionStarted)
+            PlayNoticeDip();
+        else if (!inputLockedByNotice)
+            RecalcTargetY();
+    }
+
+    void PlayNoticeDip()
+    {
+        if (noticeCo != null)
+            StopCoroutine(noticeCo);
+        noticeCo = StartCoroutine(NoticeDipRoutine());
+    }
+
+    System.Collections.IEnumerator NoticeDipRoutine()
+    {
+        inputLockedByNotice = true;
+
+        float baseY = isOpen ? shownY : hiddenY;
+        targetY = baseY + noticeDropY; // 下げる
+
+        yield return new WaitForSeconds(noticeDownSeconds);
+
+        // 上げる
+        targetY = isOpen ? shownY : hiddenY;
+
+        // 待つ
+        if (panelRoot != null)
+        {
+            while (Mathf.Abs(panelRoot.anchoredPosition.y - targetY) > 1.5f)
+                yield return null;
+        }
+        else
+        {
+            yield return null;
+        }
+
+        inputLockedByNotice = false;
+        noticeCo = null;
     }
 }

@@ -609,8 +609,18 @@ public class GameManager : MonoBehaviour
 
         consecutivePassCount++;
         int alive = CountAlivePlayers();
+
         if (alive > 1 && consecutivePassCount >= alive - 1)
+        {
+            int lastPlayer = lastPlayPlayerIndex;
+
             ClearFieldBecauseAllPassed();
+            if (lastPlayer >= 0)
+                activePlayerIndex = lastPlayer;
+
+            NextTurn();
+            return;
+        }
 
         NextTurn();
     }
@@ -1195,9 +1205,10 @@ public class GameManager : MonoBehaviour
 
         Debug.Log($"場が流れた {summary}");
 
-        ClearFieldAfterSpecial();
-        lastPlayPlayerIndex = -1;
-        roundActionLog.Clear();
+        int lastPlayer = lastPlayPlayerIndex;
+        ClearFieldBecauseAllPassed();
+        activePlayerIndex = lastPlayer;
+        NextTurn();
     }
 
     private void AddRoundAction(string message)
@@ -1223,6 +1234,8 @@ public class GameManager : MonoBehaviour
             npcHandView.SetThinkingPlayer(0);
 
         RefreshHandCountsOnly();
+
+        // 最下位
         if (finishOrder.Count >= playerHands.Count - 1)
         {
             for (int i = 0; i < playerHands.Count; i++)
@@ -1243,10 +1256,14 @@ public class GameManager : MonoBehaviour
             EndGameShowVictory();
             return;
         }
-        if (playerIndex == 0 && finishOrder.Count == 1 && !isResolvingRanks && !gameEnded)
-            StartCoroutine(ResolveRemainingRanksFast());
-    }
 
+        // 倍速
+        if (playerIndex == 0 && !isResolvingRanks && !gameEnded)
+        {
+            if (CountAlivePlayers() > 0)
+                StartCoroutine(ResolveRemainingRanksFast());
+        }
+    }
     private System.Collections.IEnumerator ResolveRemainingRanksFast()
     {
         isResolvingRanks = true;
