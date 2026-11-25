@@ -119,75 +119,6 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
---- !u!1001 &120976316
-PrefabInstance:
-  m_ObjectHideFlags: 0
-  serializedVersion: 2
-  m_Modification:
-    serializedVersion: 3
-    m_TransformParent: {fileID: 0}
-    m_Modifications:
-    - target: {fileID: -8679921383154817045, guid: 839c780abe98d7e4b8987c631a2ed82e, type: 3}
-      propertyPath: m_LocalScale.x
-      value: 41.64286
-      objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: 839c780abe98d7e4b8987c631a2ed82e, type: 3}
-      propertyPath: m_LocalScale.y
-      value: 41.64286
-      objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: 839c780abe98d7e4b8987c631a2ed82e, type: 3}
-      propertyPath: m_LocalScale.z
-      value: 41.64286
-      objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: 839c780abe98d7e4b8987c631a2ed82e, type: 3}
-      propertyPath: m_LocalPosition.x
-      value: 20882.428
-      objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: 839c780abe98d7e4b8987c631a2ed82e, type: 3}
-      propertyPath: m_LocalPosition.y
-      value: -2572.1233
-      objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: 839c780abe98d7e4b8987c631a2ed82e, type: 3}
-      propertyPath: m_LocalPosition.z
-      value: -64182.24
-      objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: 839c780abe98d7e4b8987c631a2ed82e, type: 3}
-      propertyPath: m_LocalRotation.w
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: 839c780abe98d7e4b8987c631a2ed82e, type: 3}
-      propertyPath: m_LocalRotation.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: 839c780abe98d7e4b8987c631a2ed82e, type: 3}
-      propertyPath: m_LocalRotation.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: 839c780abe98d7e4b8987c631a2ed82e, type: 3}
-      propertyPath: m_LocalRotation.z
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: 839c780abe98d7e4b8987c631a2ed82e, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: 839c780abe98d7e4b8987c631a2ed82e, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.y
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: -8679921383154817045, guid: 839c780abe98d7e4b8987c631a2ed82e, type: 3}
-      propertyPath: m_LocalEulerAnglesHint.z
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 919132149155446097, guid: 839c780abe98d7e4b8987c631a2ed82e, type: 3}
-      propertyPath: m_Name
-      value: "\u90E8\u5C4B"
-      objectReference: {fileID: 0}
-    m_RemovedComponents: []
-    m_RemovedGameObjects: []
-    m_AddedGameObjects: []
-    m_AddedComponents: []
-  m_SourcePrefab: {fileID: 100100000, guid: 839c780abe98d7e4b8987c631a2ed82e, type: 3}
 --- !u!1 &379409668
 GameObject:
   m_ObjectHideFlags: 0
@@ -646,6 +577,66 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0, y: 0}
+--- !u!1 &917703352
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 917703354}
+  - component: {fileID: 917703353}
+  m_Layer: 0
+  m_Name: SfxPlayer
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &917703353
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 917703352}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8125232e7725d9f44a3d23defc61fae0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Game::SfxPlayer
+  seSource: {fileID: 0}
+  cardPlay: {fileID: 8300000, guid: c0ecf5ce49167d24b801e4a2f2acd26e, type: 3}
+  cardDeal: {fileID: 8300000, guid: 1d96b01a95a95f4468dbd63fd26f6c65, type: 3}
+  pass: {fileID: 8300000, guid: 290aa8dde5fb6824b9c1574260dd1327, type: 3}
+  turnStart: {fileID: 8300000, guid: a4670106607d1ea41b13850bc6b79fd7, type: 3}
+  shibari: {fileID: 8300000, guid: 5d79a0272f19c2044bd4e99c6c706ae2, type: 3}
+  revolution: {fileID: 8300000, guid: 71a15444e0b34974a8ebb35d48008fdb, type: 3}
+  eightCut: {fileID: 8300000, guid: 3c613be667b9e18409d71ca5c3310efe, type: 3}
+  sevenGive: {fileID: 8300000, guid: 5b6e26d9853e125408d8007107da38ef, type: 3}
+  finish: {fileID: 8300000, guid: 25796bf74fd09004d8b4665ff15672bb, type: 3}
+  fieldClear: {fileID: 8300000, guid: 53ad105813008e740a895586aeb76053, type: 3}
+  uiClick: {fileID: 8300000, guid: 04b081fdc378c45489899da1867d510d, type: 3}
+  panelOpen: {fileID: 8300000, guid: 3f632bd5f24f5414283ba4a27ea5a3dd, type: 3}
+  victoryRank: {fileID: 8300000, guid: 35fbf7bad43432b409a2a4001a998fd0, type: 3}
+  victoryJingle: {fileID: 8300000, guid: 446e6147fddf1cd488679e795c90f006, type: 3}
+  volume: 1
+--- !u!4 &917703354
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 917703352}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: -23.83321, y: -89.24217, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1 &1228202821
 GameObject:
   m_ObjectHideFlags: 0
@@ -825,7 +816,7 @@ RectTransform:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1425681281}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalPosition: {x: 0, y: 0, z: -974}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -1124,4 +1115,4 @@ SceneRoots:
   - {fileID: 871260545}
   - {fileID: 621374362}
   - {fileID: 1853521770}
-  - {fileID: 120976316}
+  - {fileID: 917703354}

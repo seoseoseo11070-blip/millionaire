@@ -5,11 +5,8 @@ public class SceneChanger : MonoBehaviour
 {
     public void OnStartButtonClicked()
     {
-        if (!TitleDifficultySelector.IsCurrentDifficultyPlayable())
-        {
-            Debug.Log("この強さではまだ遊べません");
-            return;
-        }
+        if (SfxPlayer.Instance != null)
+            SfxPlayer.Instance.PlayUiClick();
 
         SceneManager.LoadScene("GameScene");
     }

@@ -91,6 +91,10 @@ public class TitleDifficultySelector : MonoBehaviour, IPointerEnterHandler, IPoi
 
     public void ToggleOpen()
     {
+
+        if (SfxPlayer.Instance != null)
+            SfxPlayer.Instance.PlayPanelOpen();
+
         isOpen = !isOpen;
         targetX = isOpen ? shownX : hiddenX;
     }
@@ -148,5 +152,8 @@ public class TitleDifficultySelector : MonoBehaviour, IPointerEnterHandler, IPoi
         sessionDifficulty = next;
         ApplyVisual();
         UpdateStartButton();
+
+        if (SfxPlayer.Instance != null)
+            SfxPlayer.Instance.PlayUiClick();
     }
 }

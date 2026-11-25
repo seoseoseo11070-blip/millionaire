@@ -132,6 +132,9 @@ public class BattleInfoPanel : MonoBehaviour
     {
         if (inputLockedByNotice) return;
 
+        if (SfxPlayer.Instance != null)
+            SfxPlayer.Instance.PlayPanelOpen();
+
         isOpen = !isOpen;
         RecalcTargetY();
     }

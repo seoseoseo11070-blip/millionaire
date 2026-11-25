@@ -388,6 +388,9 @@ public class GameManager : MonoBehaviour
 
             newCard.transform.SetParent(handArea);
 
+            if (SfxPlayer.Instance != null)
+                SfxPlayer.Instance.PlayCardDeal();
+
             playerDealt++;
             dealCounts[0] = playerDealt;
             float ratio = myHand.Count > 0 ? (float)playerDealt / myHand.Count : 1f;
@@ -526,6 +529,9 @@ public class GameManager : MonoBehaviour
     {
         if (gameEnded || isResolvingRanks || isClearingField) return;
 
+        if (SfxPlayer.Instance != null)
+            SfxPlayer.Instance.PlayTurnStart();
+
         if (HasPlayerFinished(activePlayerIndex))
         {
             if (thinkingEffect != null)
@@ -599,6 +605,9 @@ public class GameManager : MonoBehaviour
         if (isWaitingForSevenGive) return;
         if (isClearingField) return;
         if (activePlayerIndex == 0 && !isWaitingForPlayerInput) return;
+
+        if (SfxPlayer.Instance != null)
+            SfxPlayer.Instance.PlayPass();
 
         string message = $"{PlayerName(activePlayerIndex)}はパスした";
         AddRoundAction(message);
@@ -812,6 +821,8 @@ public class GameManager : MonoBehaviour
 
     private void PlaceCardsOnField(List<Card> cards)
     {
+        if (SfxPlayer.Instance != null)
+            SfxPlayer.Instance.PlayCardPlay();
         ClearAllFieldSlots();
 
         for (int i = 0; i < cards.Count && i < fieldSlots.Length; i++)
@@ -820,6 +831,7 @@ public class GameManager : MonoBehaviour
 
             GameObject fieldCard = Instantiate(cardPrefab, fieldSlots[i]);
             RectTransform rt = fieldCard.GetComponent<RectTransform>();
+
             if (rt != null)
             {
                 rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0.5f, 0.5f);
@@ -835,6 +847,7 @@ public class GameManager : MonoBehaviour
                 if (spriteIndex >= 0 && spriteIndex < cardSprites.Length && cardSprites[spriteIndex] != null)
                     img.sprite = cardSprites[spriteIndex];
             }
+
         }
     }
 
@@ -857,6 +870,8 @@ public class GameManager : MonoBehaviour
                             lockedSuitOrder.Add(c.suit);
                     }
                     Debug.Log($"2枚縛り発動: {string.Join(",", lockedSuitOrder)}");
+                    if (SfxPlayer.Instance != null)
+                        SfxPlayer.Instance.PlayShibari();
                 }
             }
             else if (previousField.Count == 1 && cards.Count == 1)
@@ -870,6 +885,8 @@ public class GameManager : MonoBehaviour
                     lockedSuits.Add(cards[0].suit);
                     lockedSuitOrder.Add(cards[0].suit);
                     Debug.Log($"1枚縛り発動: {cards[0].suit}");
+                    if (SfxPlayer.Instance != null)
+                        SfxPlayer.Instance.PlayShibari();
                 }
             }
         }
@@ -962,6 +979,8 @@ public class GameManager : MonoBehaviour
         {
             isRevolution = !isRevolution;
             Debug.Log($"革命 現在: {(isRevolution ? "革命中" : "通常")}");
+            if (SfxPlayer.Instance != null)
+                SfxPlayer.Instance.PlayRevolution();
             RefreshBattleInfoUI();
         }
 
@@ -969,11 +988,16 @@ public class GameManager : MonoBehaviour
         {
             isRevolution = !isRevolution;
             Debug.Log($"階段革命 現在: {(isRevolution ? "革命中" : "通常")}");
+            if (SfxPlayer.Instance != null)
+                SfxPlayer.Instance.PlayRevolution();
             RefreshBattleInfoUI();
         }
 
         if (validator.ContainsNumber(cards, 8))
         {
+            if (SfxPlayer.Instance != null)
+                SfxPlayer.Instance.PlayEightCut();
+
             if (!isResolvingRanks)
                 StartCoroutine(DelayedClearFieldAndContinue(playerIndex));
             else
@@ -1001,6 +1025,9 @@ public class GameManager : MonoBehaviour
             sevenGiveToIndex = toIndex;
             isWaitingForPlayerInput = true;
             Debug.Log($"7渡し {canGive} 枚選んで Enter(相手: {PlayerName(toIndex)})");
+
+            if (SfxPlayer.Instance != null)
+                SfxPlayer.Instance.PlaySevenGive();
 
             if (sevenGiveIndicator != null)
                 sevenGiveIndicator.Show();
@@ -1096,6 +1123,9 @@ public class GameManager : MonoBehaviour
 
         Debug.Log($"7渡し {PlayerName(fromIndex)} → {PlayerName(toIndex)} に {count}枚");
 
+        if (SfxPlayer.Instance != null)
+            SfxPlayer.Instance.PlaySevenGive();
+
         if (toIndex == 0 && !isResolvingRanks)
             AddReceivedCardsToPlayerHand(givenCards);
 
@@ -1181,6 +1211,7 @@ public class GameManager : MonoBehaviour
 
     private void ClearFieldAfterSpecial()
     {
+
         ClearAllFieldSlots();
         sevenGiveIndicator.Hide();
         currentFieldCardCount = 0;
@@ -1199,6 +1230,9 @@ public class GameManager : MonoBehaviour
 
     private void ClearFieldBecauseAllPassed()
     {
+        if (SfxPlayer.Instance != null)
+            SfxPlayer.Instance.PlayFieldClear();
+
         string summary = roundActionLog.Count == 0
             ? "（行動なし）"
             : string.Join(" / ", roundActionLog);
@@ -1226,6 +1260,9 @@ public class GameManager : MonoBehaviour
         if (!finishOrder.Contains(playerIndex))
             finishOrder.Add(playerIndex);
 
+        if (SfxPlayer.Instance != null)
+            SfxPlayer.Instance.PlayFinish();
+
         Debug.Log($"{PlayerName(playerIndex)}が上がった（{finishOrder.Count}位）");
 
         if (thinkingEffect != null && activePlayerIndex == playerIndex)
@@ -1244,6 +1281,10 @@ public class GameManager : MonoBehaviour
                 {
                     hasFinished[i] = true;
                     finishOrder.Add(i);
+
+                    if (SfxPlayer.Instance != null)
+                        SfxPlayer.Instance.PlayFinish();
+
                     Debug.Log($"{PlayerName(i)}は最下位");
                 }
             }

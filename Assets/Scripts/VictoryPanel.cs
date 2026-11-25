@@ -43,6 +43,10 @@ public class VictoryPanel : MonoBehaviour
 
     public void Show(List<int> finishOrder)
     {
+
+        if (SfxPlayer.Instance != null)
+            SfxPlayer.Instance.PlayVictoryJingle();
+
         if (root != null)
             root.SetActive(true);
 
@@ -77,6 +81,9 @@ public class VictoryPanel : MonoBehaviour
                 seatRankImages[seat].enabled = sp != null;
                 seatRankImages[seat].transform.SetAsLastSibling();
             }
+
+            if (SfxPlayer.Instance != null)
+                SfxPlayer.Instance.PlayVictoryRank();
 
             Debug.Log($"順位発表: {rank}位 → {PlayerLabel(playerIndex)}");
             if (rank > 1)
