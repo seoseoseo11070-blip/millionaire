@@ -187,6 +187,17 @@ public class GameManager : MonoBehaviour
 
     public bool TryValidatePlay(List<Card> cards, out string playType, out string error)
     {
+
+        if (fieldIsSingleJoker
+        && cards != null
+        && cards.Count == 1
+        && cards[0].suit == Card.SuitType.Spade
+        && cards[0].number == 3)
+        {
+            playType = "1枚";
+            error = "";
+            return true;
+        }
         Card.SuitType? suitForValidator = null;
         if (lockedSuits != null && lockedSuits.Count == 1)
             suitForValidator = GetLockedSuit();
@@ -821,8 +832,11 @@ public class GameManager : MonoBehaviour
 
     private void PlaceCardsOnField(List<Card> cards)
     {
-        if (SfxPlayer.Instance != null)
+        bool isEightCut = cards != null && validator.ContainsNumber(cards, 8);
+
+        if (!isEightCut && SfxPlayer.Instance != null)
             SfxPlayer.Instance.PlayCardPlay();
+
         ClearAllFieldSlots();
 
         for (int i = 0; i < cards.Count && i < fieldSlots.Length; i++)
@@ -997,7 +1011,6 @@ public class GameManager : MonoBehaviour
         {
             if (SfxPlayer.Instance != null)
                 SfxPlayer.Instance.PlayEightCut();
-
             if (!isResolvingRanks)
                 StartCoroutine(DelayedClearFieldAndContinue(playerIndex));
             else
@@ -1211,9 +1224,9 @@ public class GameManager : MonoBehaviour
 
     private void ClearFieldAfterSpecial()
     {
-
         ClearAllFieldSlots();
-        sevenGiveIndicator.Hide();
+        if (sevenGiveIndicator != null)
+            sevenGiveIndicator.Hide();
         currentFieldCardCount = 0;
         currentFieldCardStrength = 0;
         currentFieldPlayType = "";
@@ -1238,11 +1251,10 @@ public class GameManager : MonoBehaviour
             : string.Join(" / ", roundActionLog);
 
         Debug.Log($"場が流れた {summary}");
+        ClearFieldAfterSpecial();
 
-        int lastPlayer = lastPlayPlayerIndex;
-        ClearFieldBecauseAllPassed();
-        activePlayerIndex = lastPlayer;
-        NextTurn();
+        lastPlayPlayerIndex = -1;
+        roundActionLog.Clear();
     }
 
     private void AddRoundAction(string message)

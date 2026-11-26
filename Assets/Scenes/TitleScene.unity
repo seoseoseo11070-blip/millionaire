@@ -608,7 +608,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Game::SfxPlayer
   seSource: {fileID: 0}
   cardPlay: {fileID: 8300000, guid: c0ecf5ce49167d24b801e4a2f2acd26e, type: 3}
-  cardDeal: {fileID: 8300000, guid: 1d96b01a95a95f4468dbd63fd26f6c65, type: 3}
+  cardDeal: {fileID: 0}
   pass: {fileID: 8300000, guid: 290aa8dde5fb6824b9c1574260dd1327, type: 3}
   turnStart: {fileID: 8300000, guid: a4670106607d1ea41b13850bc6b79fd7, type: 3}
   shibari: {fileID: 8300000, guid: 5d79a0272f19c2044bd4e99c6c706ae2, type: 3}
