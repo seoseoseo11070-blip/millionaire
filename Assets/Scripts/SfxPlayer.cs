@@ -30,6 +30,9 @@ public class SfxPlayer : MonoBehaviour
     [Range(0f, 1f)]
     [SerializeField] private float volume = 1f;
 
+    private float passSoundEndTime;
+    private float sourceBaseVolume = 1f;
+
     void Awake()
     {
         if (Instance != null && Instance != this)
@@ -47,17 +50,37 @@ public class SfxPlayer : MonoBehaviour
         seSource.playOnAwake = false;
         seSource.loop = false;
         seSource.spatialBlend = 0f;
+        sourceBaseVolume = seSource.volume;
     }
 
     public void Play(AudioClip clip, float volScale = 1f)
     {
         if (clip == null || seSource == null) return;
+        seSource.volume = sourceBaseVolume;
         seSource.PlayOneShot(clip, Mathf.Clamp01(volume * volScale));
     }
 
-    public void PlayCardPlay() => Play(cardPlay);
+    private void PlayExclusive(AudioClip clip, float volScale = 1f)
+    {
+        if (clip == null || seSource == null) return;
+
+        seSource.Stop();
+        seSource.volume = sourceBaseVolume * Mathf.Clamp01(volume * volScale);
+        seSource.clip = clip;
+        seSource.Play();
+    }
+
+    public void PlayCardPlay()
+    {
+        if (Time.unscaledTime < passSoundEndTime) return;
+        PlayExclusive(cardPlay);
+    }
     public void PlayCardDeal() => Play(cardDeal, 0.7f);
-    public void PlayPass() => Play(pass);
+    public void PlayPass()
+    {
+        passSoundEndTime = Time.unscaledTime + (pass != null ? pass.length : 0f);
+        PlayExclusive(pass);
+    }
     public void PlayTurnStart() => Play(turnStart, 0.5f);
     public void PlayShibari() => Play(shibari);
     public void PlayRevolution() => Play(revolution);

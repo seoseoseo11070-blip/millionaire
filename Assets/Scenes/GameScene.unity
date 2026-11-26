@@ -2406,7 +2406,7 @@ MonoBehaviour:
   panelOpen: {fileID: 8300000, guid: 3f632bd5f24f5414283ba4a27ea5a3dd, type: 3}
   victoryRank: {fileID: 8300000, guid: 35fbf7bad43432b409a2a4001a998fd0, type: 3}
   victoryJingle: {fileID: 8300000, guid: 446e6147fddf1cd488679e795c90f006, type: 3}
-  volume: 1
+  volume: 0.5
 --- !u!4 &1551880833
 Transform:
   m_ObjectHideFlags: 0
