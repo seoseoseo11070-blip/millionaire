@@ -617,6 +617,13 @@ public class GameManager : MonoBehaviour
         if (isClearingField) return;
         if (activePlayerIndex == 0 && !isWaitingForPlayerInput) return;
 
+        if (currentFieldCardCount == 0)
+        {
+            if (activePlayerIndex == 0)
+                Debug.LogWarning("パスできません,カードを出してください");
+            return;
+        }
+
         if (SfxPlayer.Instance != null)
             SfxPlayer.Instance.PlayPass();
 
